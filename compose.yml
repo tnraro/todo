@@ -1,0 +1,13 @@
+# Example deployment. Data persists in the `todo-data` volume.
+# Usage: docker compose up --build -d
+services:
+  todo:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - todo-data:/data
+    restart: unless-stopped
+
+volumes:
+  todo-data:
