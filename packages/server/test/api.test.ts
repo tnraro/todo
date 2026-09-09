@@ -150,6 +150,69 @@ describe("todos", () => {
   });
 });
 
+describe("delete", () => {
+  test("archive-only hard delete with rev and snapshot", async () => {
+    const { data } = await req("POST", "/api/projects", { title: "D" });
+    const pid = data.id as string;
+    const url = `/api/projects/${pid}/todos`;
+
+    await req("POST", url, { id: "gone", title: "gone" });
+    await req("POST", url, { id: "stays", title: "stays" });
+
+    // Active todos cannot be hard deleted.
+    const refused = await req("DELETE", `${url}/gone`);
+    expect(refused.status).toBe(409);
+    let snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
+    expect(snap.todos.some((t) => t.id === "gone")).toBe(true);
+
+    // Archive, then delete.
+    await req("POST", `${url}/gone/move`, { toStatus: "archive" });
+    const revBefore = (await req("GET", `/api/projects/${pid}`)).data.rev as number;
+    const deleted = await req("DELETE", `${url}/gone`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.data.rev).toBe(revBefore + 1);
+
+    snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
+    expect(snap.todos.map((t) => t.id)).toEqual(["stays"]);
+    expect(snap.rev).toBe(revBefore + 1);
+
+    // Repeating, unknown todos, and unknown projects 404.
+    expect((await req("DELETE", `${url}/gone`)).status).toBe(404);
+    expect((await req("DELETE", `${url}/ghost`)).status).toBe(404);
+    expect((await req("DELETE", "/api/projects/nope/todos/gone")).status).toBe(404);
+
+    // The id is free again after deletion.
+    const recreated = await req("POST", url, { id: "gone", title: "again" });
+    expect(recreated.status).toBe(201);
+  });
+
+  test("todo:deleted arrives on the stream", async () => {
+    const { data } = await req("POST", "/api/projects", { title: "E" });
+    const pid = data.id as string;
+    const url = `/api/projects/${pid}/todos`;
+    await req("POST", url, { id: "x", title: "x" });
+    await req("POST", `${url}/x/move`, { toStatus: "archive" });
+    const snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
+
+    const liveP = fetch(`${base}/api/projects/${pid}/events?sinceRev=${snap.rev}`);
+    await new Promise((r) => setTimeout(r, 150));
+    const deleted = await req("DELETE", `${url}/x`);
+    const live = await liveP;
+    expect(live.status).toBe(200);
+    const reader = live.body!.getReader();
+    try {
+      const { value, done } = await reader.read();
+      expect(done).toBe(false);
+      const text = new TextDecoder().decode(value);
+      expect(text).toContain('"type":"todo:deleted"');
+      expect(text).toContain(`"rev":${deleted.data.rev}`);
+      expect(text).toContain('"todoId":"x"');
+    } finally {
+      await reader.cancel();
+    }
+  });
+});
+
 describe("sse", () => {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

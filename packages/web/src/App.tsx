@@ -14,6 +14,7 @@ import {
   ApiError,
   createProject,
   createTodo,
+  deleteTodo,
   fetchSnapshot,
   genTodoId,
   moveTodo,
@@ -308,6 +309,10 @@ function Board(props: { projectId: string }) {
       }
       return;
     }
+    if (event.type === "todo:deleted") {
+      applyTodos(todos().filter((t) => t.id !== event.todoId));
+      return;
+    }
     const prev = todos();
     const idx = prev.findIndex((t) => t.id === event.todo.id);
     const next =
@@ -417,6 +422,39 @@ function Board(props: { projectId: string }) {
         applyTodos(prevList);
         unmarkPending(id);
       });
+  }
+
+  /**
+   * Delete key: a non-archived card goes straight to the top of archive;
+   * an archived card is permanently deleted. Focus moves to the next sibling,
+   * the previous one, or nowhere when the column empties.
+   */
+  function handleDelete(id: string): void {
+    const todo = todos().find((t) => t.id === id);
+    if (!todo) return;
+    if (todo.status !== "archive") {
+      handleMove(id, "archive", null, null);
+      return;
+    }
+    const prevList = todos();
+    const col = prevList
+      .filter((t) => t.status === "archive")
+      .sort(byRank);
+    const i = col.findIndex((t) => t.id === id);
+    const nextId = col[i + 1]?.id ?? col[i - 1]?.id ?? null;
+    applyTodos(prevList.filter((t) => t.id !== id));
+    markPending(id);
+    void deleteTodo(pid, id)
+      .then(({ rev }) => {
+        if (rev > lastRev) lastRev = rev;
+        unmarkPending(id);
+      })
+      .catch(() => {
+        applyTodos(prevList);
+        unmarkPending(id);
+      });
+    if (nextId) focusCard(nextId);
+    else (document.activeElement as HTMLElement | null)?.blur?.();
   }
 
   function handleProjectRename(title: string): void {
@@ -620,6 +658,11 @@ function Board(props: { projectId: string }) {
     if (e.key === "Enter") {
       e.preventDefault();
       startEdit(id);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      // Backspace doubles as Delete for keyboards without a Delete key.
+      // Inputs return earlier, so text editing is never affected.
+      e.preventDefault();
+      handleDelete(id);
     } else if (
       (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
       !e.altKey

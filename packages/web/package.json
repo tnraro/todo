@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:focus": "vite build --config vite.focus.config.ts && bun test test/focus-click.test.ts && bun test test/focus-move.test.ts && bun test test/focus-skip.test.ts"
+    "test:focus": "vite build --config vite.focus.config.ts && bun test test/focus-click.test.ts && bun test test/focus-move.test.ts && bun test test/focus-skip.test.ts && bun test test/focus-delete.test.ts"
   },
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.7",

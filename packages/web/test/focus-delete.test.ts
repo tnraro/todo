@@ -1,0 +1,64 @@
+// Delete key: a non-archived card goes straight to the top of archive;
+// an archived card is permanently deleted, with focus moving to the next
+// sibling (previous when last, nowhere when the column empties).
+// Run via `bun run test:focus`.
+import { afterAll, describe, expect, test } from "bun:test";
+import { columnIds, focusedCardIn, initDom, waitFor } from "./setup";
+
+const window = initDom("http://localhost/p/del123");
+
+const board = {
+  project: { id: "del123", title: "D" },
+  todos: [
+    { id: "x1", projectId: "del123", title: "x", status: "todo", rank: "5", updatedAt: 1 },
+    { id: "a1", projectId: "del123", title: "a", status: "archive", rank: "5", updatedAt: 1 },
+    { id: "a2", projectId: "del123", title: "b", status: "archive", rank: "6", updatedAt: 1 },
+  ],
+  rev: 7,
+};
+
+function key(target: HTMLElement, keyName: string): void {
+  target.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: keyName, bubbles: true }),
+  );
+}
+
+describe("delete key", () => {
+  test("archive first, then permanent delete with focus handoff", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp(board);
+    await settle();
+    expect(columnIds(0)).toEqual(["x1"]);
+    expect(columnIds(3)).toEqual(["a1", "a2"]);
+
+    const card = (id: string): HTMLElement =>
+      document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
+
+    // Non-archived: straight to the top of archive, focus follows.
+    card("x1").focus();
+    key(card("x1"), "Delete");
+    expect((await waitFor(1500, () => focusedCardIn("x1", 3)))?.dataset.todoId).toBe("x1");
+    expect(columnIds(0)).toEqual([]);
+    expect(columnIds(3)).toEqual(["x1", "a1", "a2"]);
+
+    // Archived with a next sibling: gone, focus moves down.
+    key(card("a1"), "Delete");
+    expect((await waitFor(1500, () => focusedCardIn("a2", 3)))?.dataset.todoId).toBe("a2");
+    expect(columnIds(3)).toEqual(["x1", "a2"]);
+
+    // Archived last: gone, focus moves up (Backspace doubles as Delete).
+    key(card("a2"), "Backspace");
+    expect((await waitFor(1500, () => focusedCardIn("x1", 3)))?.dataset.todoId).toBe("x1");
+    expect(columnIds(3)).toEqual(["x1"]);
+
+    // Archived alone: gone, focus leaves to the body.
+    key(card("x1"), "Delete");
+    await waitFor(1000, () => (columnIds(3).length === 0 ? document.body : null));
+    expect(columnIds(3)).toEqual([]);
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
+afterAll(async () => {
+  await window.happyDOM.close();
+});

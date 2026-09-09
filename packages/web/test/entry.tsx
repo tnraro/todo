@@ -110,6 +110,14 @@ function installBackend(snapshot: FakeSnapshot): void {
     if (m) {
       const todo = store.get(decodeURIComponent(m[2]));
       if (!todo) return Response.json({ error: "todo not found" }, { status: 404 });
+      if (method === "DELETE") {
+        if (todo.status !== "archive") {
+          return Response.json({ error: "only archived todos can be deleted" }, { status: 409 });
+        }
+        store.delete(todo.id);
+        rev += 1;
+        return Response.json({ rev });
+      }
       if (method === "PATCH") todo.title = String(body.title);
       if (m[3] === "/move") {
         todo.status = String(body.toStatus);

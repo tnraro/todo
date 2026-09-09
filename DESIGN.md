@@ -13,7 +13,7 @@ Non-goals (YAGNI, will not build):
 
 - Auth, ownership, permissions, history/undo, comments, assignees, due dates, tags, search/filter, multiple views, notifications.
 - CRDT, OT, vector clocks. Server receive order is the source of truth.
-- Hard delete. `archive` is the terminal state.
+- Hard delete outside archive. Only archived todos can be permanently deleted.
 
 ## 2. Tech Stack
 
@@ -99,7 +99,8 @@ No whole-record `PUT`. Each operation updates only its own fields on the server,
   - Idempotent: resending the same `id` returns the existing todo instead of duplicating.
 - `PATCH /projects/:id/todos/:todoId { title }` — updates title only.
 - `POST /projects/:id/todos/:todoId/move { toStatus, beforeId, afterId }` — updates `status + rank` atomically.
-- No `DELETE`. Moving to `archive` is the delete.
+- `DELETE /projects/:id/todos/:todoId` — permanently deletes an archived todo
+  (409 when it is not in `archive`). No other hard delete exists.
 
 Every mutation response includes `{ todo, rev }`. `rev` is the project-global sequence.
 
@@ -114,7 +115,9 @@ Every mutation response includes `{ todo, rev }`. `rev` is the project-global se
 Split direction: writes over REST, reads over SSE. Simpler than bidirectional WebSocket, and robust on plain HTTP infra with reconnect.
 
 - `GET /projects/:id/events` (SSE).
-  - Events: `project:renamed`, `todo:created`, `todo:renamed`, `todo:moved`. Payload is the changed entity plus `rev` only. No full-list rebroadcast.
+  - Events: `project:renamed`, `todo:created`, `todo:renamed`, `todo:moved`,
+    `todo:deleted`. Payload is the changed entity plus `rev` only
+    (`todo:deleted` carries just the `todoId`). No full-list rebroadcast.
   - Reconnect via `Last-Event-ID = lastRev`. Server also supports `?sinceRev=`.
 
 Client apply rules (apply rules, not sync logic):
@@ -161,7 +164,11 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 ### Interaction (Keyboard-First, Linear-like)
 
 - `n` or per-column `+ Add`: creates an input row at the top of `todo` with focus. Enter saves, Esc cancels. Enter on empty input cancels.
-- Card click: inline edit. Enter or blur saves; Esc restores. Blur on empty input restores instead of saving.
+- Card click edits inline (`Enter` or blur saves; `Esc` or blur on empty input
+  restores). A focused card also starts editing on `Enter` or any printable
+  character. `Delete` (or `Backspace` on keyboards without one) archives the
+  card, or permanently deletes it when it is already in `archive`; focus moves
+  to the next sibling, the previous one, or nowhere when the column empties.
 - Drag: native DnD. 2px insertion line at drop position. Optimistic move on drop.
 - Keyboard move: with a card selected, plain arrows navigate focus between
   cards (`Up/Down` within the column, `Left/Right` to the same position in the
@@ -198,6 +205,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 | Todo create | `POST .../todos` | `title, status=todo, rank (server-generated)` | `todo:created` |
 | Todo rename | `PATCH .../todos/:id` | `title` only | `todo:renamed` |
 | Todo move / reorder | `POST .../todos/:id/move` | `status + rank` atomically | `todo:moved` |
+| Todo delete (archive only) | `DELETE .../todos/:id` | row removed | `todo:deleted` |
 
 The client knows no ordering algorithm, no merge, and no clock. It points at neighbors; the server stamps order and broadcasts. This keeps both code and UX light.
 

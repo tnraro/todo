@@ -93,6 +93,17 @@ export function moveTodo(
   );
 }
 
+/** Hard delete. The server only deletes archived todos. */
+export function deleteTodo(
+  projectId: string,
+  todoId: string,
+): Promise<{ rev: number }> {
+  return call(
+    `/api/projects/${encodeURIComponent(projectId)}/todos/${encodeURIComponent(todoId)}`,
+    { method: "DELETE" },
+  );
+}
+
 const ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /** Client-generated todo id: 12 url-safe chars, also used for idempotent retry. */

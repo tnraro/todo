@@ -50,7 +50,9 @@ const RATE_MAX = 300;
 const rateBuckets = new Map<string, { count: number; start: number }>();
 
 function rateLimited(req: Request): boolean {
-  if (req.method !== "POST" && req.method !== "PATCH") return false;
+  if (req.method !== "POST" && req.method !== "PATCH" && req.method !== "DELETE") {
+    return false;
+  }
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
@@ -231,6 +233,16 @@ export function createApp(db: Db, options: AppOptions = {}) {
             const todo = db.getTodo(projectId, todoId)!;
             hub.publish(projectId, { type: "todo:renamed", rev, todo });
             return json({ todo, rev });
+          }
+
+          if (action === "" && req.method === "DELETE") {
+            const result = db.deleteTodo(projectId, todoId);
+            if (result === null) return notFound("todo not found");
+            if (result.outcome === "active") {
+              return json({ error: "only archived todos can be deleted" }, 409);
+            }
+            hub.publish(projectId, { type: "todo:deleted", rev: result.rev, todoId });
+            return json({ rev: result.rev });
           }
 
           if (action === "/move" && req.method === "POST") {

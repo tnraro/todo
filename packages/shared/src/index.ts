@@ -36,6 +36,7 @@ export type ServerEvent =
   | { type: "todo:created"; rev: number; todo: Todo }
   | { type: "todo:renamed"; rev: number; todo: Todo }
   | { type: "todo:moved"; rev: number; todo: Todo }
+  | { type: "todo:deleted"; rev: number; todoId: string }
   | { type: "reset"; rev: number };
 
 export interface CreateProjectRequest {

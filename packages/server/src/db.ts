@@ -24,6 +24,15 @@ export interface Db {
     toStatus: Status,
     rank: string,
   ): number | null;
+  /**
+   * Hard delete. Only archived todos may be deleted: returns "archived" when
+   * removed (with the new rev), "active" when the todo exists but is not in
+   * archive, null when missing.
+   */
+  deleteTodo(
+    projectId: string,
+    todoId: string,
+  ): { outcome: "deleted"; rev: number } | { outcome: "active" } | null;
   todoExists(todoId: string): { projectId: string } | null;
 }
 
@@ -109,6 +118,9 @@ export function openDb(path: string): Db {
   );
   const bumpRev = db.prepare(
     "UPDATE projects SET rev = rev + 1 WHERE id = ? RETURNING rev",
+  );
+  const deleteTodoRow = db.prepare(
+    "DELETE FROM todos WHERE project_id = ? AND id = ?",
   );
 
   const now = () => Date.now();
@@ -201,6 +213,18 @@ export function openDb(path: string): Db {
         if (changed.changes === 0) return null;
         const row = bumpRev.get(projectId) as { rev: number };
         return row.rev;
+      })();
+    },
+
+    deleteTodo(projectId, todoId) {
+      return db.transaction(() => {
+        const existing =
+          (selectTodo.get(projectId, todoId) as TodoRow | null) ?? null;
+        if (!existing) return null;
+        if (existing.status !== "archive") return { outcome: "active" } as const;
+        deleteTodoRow.run(projectId, todoId);
+        const rev = bumpRev.get(projectId) as { rev: number };
+        return { outcome: "deleted", rev: rev.rev } as const;
       })();
     },
 
