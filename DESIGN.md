@@ -30,8 +30,10 @@ Non-goals (YAGNI, will not build):
 
 `vite-plugin-pwa` with the `injectManifest` strategy builds `src/sw.ts`.
 App shell only: precache the build output, serve `index.html` for app
-navigations (`/`, `/p/:id`), keep `/api/*` network-only (especially the SSE
-stream, which the SW never intercepts).
+navigations (`/`, `/p/:id`). `/api/*` has deliberately NO route: routing it
+through NetworkOnly turns every transient network failure into a rejected
+`respondWith` ("ServiceWorker intercepted... unexpected error"); with no
+match the traffic stays browser-native and the EventSource reconnect heals it.
 
 - Registration is manual (`index.tsx`, prod only) with the default SW
   lifecycle: updates activate on the next navigation, never force-reloading
