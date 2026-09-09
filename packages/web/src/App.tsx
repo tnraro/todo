@@ -157,6 +157,10 @@ function Board(props: { projectId: string }) {
   } | null>(null);
   const [draggingId, setDraggingId] = createSignal<string | null>(null);
   const [focusKind, setFocusKind] = createSignal<FocusKind>("idle");
+  const [focusedId, setFocusedId] = createSignal<string | null>(null);
+  const focusedStatus = createMemo(
+    () => todos().find((t) => t.id === focusedId())?.status ?? null,
+  );
 
   let lastRev = 0;
   let pendingRemoteTitle: string | null = null;
@@ -571,6 +575,7 @@ function Board(props: { projectId: string }) {
 
   function focusCard(id: string): void {
     lastCardId = id;
+    setFocusedId(id);
     const el = document.querySelector(`[data-todo-id="${CSS.escape(id)}"]`);
     (el as HTMLElement | null)?.focus?.();
   }
@@ -593,8 +598,9 @@ function Board(props: { projectId: string }) {
   /** Track keyboard/mouse focus so bare arrows can return to it. */
   function noteFocus(e: FocusEvent): void {
     const el = e.target as HTMLElement | null;
-    const id = el?.dataset?.todoId;
+    const id = el?.dataset?.todoId ?? null;
     if (id) lastCardId = id;
+    setFocusedId(id);
   }
 
   /** HUD mode: which shortcuts are currently available. */
@@ -709,6 +715,7 @@ function Board(props: { projectId: string }) {
   function onFocusTrack(e: FocusEvent): void {
     if (e.type === "focusout") {
       setFocusKind("idle");
+      setFocusedId(null);
       return;
     }
     noteFocus(e);
@@ -890,7 +897,7 @@ function Board(props: { projectId: string }) {
                 <kbd>ctrl ↑↓</kbd>
                 <span>reorder</span>
                 <kbd>del</kbd>
-                <span>archive</span>
+                <span>{focusedStatus() === "archive" ? "delete" : "archive"}</span>
               </Show>
               <Show when={focusKind() === "text"}>
                 <kbd>enter</kbd>

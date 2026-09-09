@@ -34,12 +34,22 @@ describe("delete key", () => {
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
 
-    // Non-archived: straight to the top of archive, focus follows.
+    // HUD labels del by the focused card's state: x1 is still in todo.
+    const hudHas = (s: string): boolean =>
+      document.querySelector(".hud")?.textContent?.includes(s) ?? false;
     card("x1").focus();
+    await waitFor(1000, () => (hudHas("archive") ? document.body : null));
+    expect(hudHas("archive")).toBe(true);
+
+    // Non-archived: straight to the top of archive, focus follows.
     key(card("x1"), "Delete");
     expect((await waitFor(1500, () => focusedCardIn("x1", 3)))?.dataset.todoId).toBe("x1");
     expect(columnIds(0)).toEqual([]);
     expect(columnIds(3)).toEqual(["x1", "a1", "a2"]);
+
+    // ... and the label flips once x1 is archived.
+    await waitFor(1000, () => (hudHas("delete") ? document.body : null));
+    expect(hudHas("delete")).toBe(true);
 
     // Archived with a next sibling: gone, focus moves down.
     key(card("a1"), "Delete");

@@ -182,7 +182,8 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - Shortcut HUD: fixed bottom-right, game-HUD style, `pointer-events: none`.
   Shows only the currently available shortcuts: idle (`n` new, arrows enter
   the board), card focused (edit, navigate, `Ctrl` move/reorder, `Del`
-  archive), text focused (`Enter` save, `Esc` cancel).
+  archive — or permanent delete when the focused card is already archived),
+  text focused (`Enter` save, `Esc` cancel).
 - Empty column: no "No items" placeholder. Empty space is the drop zone; only the `+ Add` row exists.
 - Loading: no skeletons. Column headers render as the frame before the initial `GET` resolves.
 - Offline / SSE drop: thin 2px amber bar under the header plus "Reconnecting…". Editing stays enabled; REST is attempted directly, rolled back on failure. No offline queue.
