@@ -40,6 +40,20 @@ describe("locale toggle", () => {
       document.querySelector(".columns .column .column-head")?.textContent;
     expect(head()).toMatch("Todo");
 
+    // Topbar: home link left, centered title, actions right.
+    const bar = document.querySelector(".topbar")!;
+    const cells = [...bar.childNodes]
+      .filter((n) => n.nodeType === 1)
+      .map((n) => (n as HTMLElement).tagName);
+    expect(cells).toEqual(["A", "BUTTON", "DIV"]);
+    const home = bar.querySelector("a.home-link") as HTMLAnchorElement;
+    // happy-dom does not reflect the href property back to the attribute,
+    // so assert the resolved property instead of getAttribute.
+    expect(new URL(home.href).pathname).toBe("/");
+    expect(
+      (bar.querySelector(".topbar-actions") as HTMLElement).textContent,
+    ).toMatch("Copy link");
+
     const toggle = () =>
       document.querySelector(".locale-toggle") as HTMLElement;
     expect(toggle().textContent).toBe("KO");

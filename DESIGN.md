@@ -138,7 +138,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 
 ### Routes / IA
 
-- `/`: one input plus [New project]. Empty input creates immediately. No server-side project list (anonymous, server knows no user). Only enhancement: `localStorage` keeps the last 10 visited IDs + titles, shown quietly below. Not a server feature.
+- `/`: one input plus [New project]. Empty input creates immediately. No server-side project list (anonymous, server knows no user). Only enhancement: `localStorage` keeps the last 10 visited IDs + titles, shown quietly below. Not a server feature. A `‹` home link in the board topbar returns here.
 - `/p/:id`: everything. No other pages.
 - Sharing is URL copy. No share modal.
 
@@ -146,7 +146,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 
 ```
 +------------------------------------------------+
-| < title (inline edit)         [Copy link]      |  h 40px
+| ‹  title (centered, inline edit)  [Copy link]  |  h 40px
 +----------+----------+----------+--------------+
 | todo  n  | doing  n | done  n  | archive  n   |  h 28px, with counts
 | + Add    |          |          |              |

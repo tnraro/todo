@@ -24,6 +24,13 @@ import {
 } from "./api";
 import { locale, setLocale, t } from "./i18n";
 
+/** Home path. A call (not a literal or const) so the compiler emits a runtime
+ * setAttribute: a static `href=/` inlines into the template unquoted, which
+ * some HTML parsers misread as an empty value. */
+function homeHref(): string {
+  return "/";
+}
+
 function byRank(a: Todo, b: Todo): number {
   if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
   return a.id < b.id ? -1 : 1;
@@ -763,7 +770,9 @@ function Board(props: { projectId: string }) {
       </Show>
       <Show when={state() === "loading"}>
         <header class="topbar">
+          <span />
           <div class="project-title">{t().board.loading}</div>
+          <span />
         </header>
         <div class="columns">
           <For each={STATUSES}>
@@ -795,6 +804,9 @@ function Board(props: { projectId: string }) {
         {(p) => (
           <>
             <header class="topbar">
+              <a class="home-link" href={homeHref()} title={t().board.backHome}>
+                ‹
+              </a>
               <Show
                 when={!editingProjectTitle()}
                 fallback={
@@ -834,8 +846,9 @@ function Board(props: { projectId: string }) {
                   {p().title}
                 </button>
               </Show>
-              <button
-                class="btn small"
+              <div class="topbar-actions">
+                <button
+                  class="btn small"
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(location.href)
@@ -849,6 +862,7 @@ function Board(props: { projectId: string }) {
                 {copied() ? t().board.copied : t().board.copyLink}
               </button>
               <LocaleToggle />
+              </div>
             </header>
             <div class="columns">
               <For each={STATUSES}>
