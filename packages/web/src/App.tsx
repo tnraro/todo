@@ -1,7 +1,7 @@
 // Single-view kanban board. No client router: "/" renders Home, "/p/:id"
 // renders Board, navigations are real page loads. Server echo is truth;
 // local writes are optimistic with rollback on failure.
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import {
   STATUSES,
   keyBetween,
@@ -583,17 +583,18 @@ function Board(props: { projectId: string }) {
   }
 
   function onBoardKeyDown(e: KeyboardEvent): void {
-    const target = e.target as HTMLElement;
-    const inInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName ?? "";
+    const inInput = tag === "INPUT" || tag === "TEXTAREA";
     if (e.key === "Escape") {
       cancelEdit();
       setAdding(false);
       setAddDraft("");
-      (target as HTMLElement).blur?.();
+      target?.blur?.();
       return;
     }
     if (inInput) return;
-    const cardEl = target.closest?.("[data-todo-id]") as HTMLElement | null;
+    const cardEl = target?.closest?.("[data-todo-id]") as HTMLElement | null;
     if ((e.key === "n" || e.key === "N") && !cardEl) {
       e.preventDefault();
       setAdding(true);
@@ -602,7 +603,8 @@ function Board(props: { projectId: string }) {
     if (!cardEl?.dataset.todoId) {
       // No card focused (and not in an input): arrows enter the board at the
       // last card, or the first one when unknown. Anything else is ignored.
-      if (e.key.startsWith("Arrow")) {
+      // Alt+arrows are left to the browser (history nav).
+      if (e.key.startsWith("Arrow") && !e.altKey) {
         e.preventDefault();
         focusLastOrFirst();
       }
@@ -612,12 +614,18 @@ function Board(props: { projectId: string }) {
     if (e.key === "Enter") {
       e.preventDefault();
       startEdit(id);
-    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    } else if (
+      (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
+      !e.altKey
+    ) {
       e.preventDefault();
       const dir: 1 | -1 = e.key === "ArrowRight" ? 1 : -1;
       if (e.ctrlKey || e.metaKey) moveStatus(id, dir);
       else focusNeighbor(id, dir, "x");
-    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    } else if (
+      (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+      !e.altKey
+    ) {
       e.preventDefault();
       const dir: 1 | -1 = e.key === "ArrowUp" ? -1 : 1;
       if (e.ctrlKey || e.metaKey) reorder(id, dir);
@@ -627,6 +635,14 @@ function Board(props: { projectId: string }) {
       startEdit(id, e.key);
     }
   }
+
+  // Global shortcut listener. Solid delegates element handlers at the render
+  // root, so a div-level listener never sees keydowns from outside the app
+  // (e.g. focus on body after clicking empty space — the common idle state).
+  // Window sees everything; the handler above ignores anything it should not
+  // touch (inputs except Escape, Alt+arrows, unknown keys).
+  window.addEventListener("keydown", onBoardKeyDown);
+  onCleanup(() => window.removeEventListener("keydown", onBoardKeyDown));
 
   // --- Boot (once per page load; navigations are full reloads) ---------------
   fetchSnapshot(pid)
@@ -647,7 +663,7 @@ function Board(props: { projectId: string }) {
     });
 
   return (
-    <div class="board" onKeyDown={onBoardKeyDown} onFocusIn={noteFocus}>
+    <div class="board" onFocusIn={noteFocus}>
       <Show when={conn() === "reconnecting" && state() === "ready"}>
         <div class="reconnect">Reconnecting…</div>
       </Show>

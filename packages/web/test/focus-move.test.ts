@@ -3,7 +3,13 @@
 // the card, so focus must follow through the optimistic remount and the async
 // server-echo remount. Run via `bun run test:focus`.
 import { afterAll, describe, expect, test } from "bun:test";
-import { columnIds, focusedCardIn, initDom, waitFor } from "./setup";
+import {
+  columnIds,
+  focusedCardIn,
+  focusedEditInput,
+  initDom,
+  waitFor,
+} from "./setup";
 
 const window = initDom("http://localhost/p/test123");
 
@@ -34,12 +40,27 @@ describe("keyboard arrows", () => {
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
 
-    // No focus yet: arrows enter the board at the first card. Dispatch on
-    // the board itself: Solid delegates at the render root, so events outside
-    // it never reach the handler.
-    const boardEl = (): HTMLElement =>
-      document.querySelector(".board") as HTMLElement;
-    key(boardEl(), "ArrowDown");
+    // Global shortcuts must work with focus outside the app tree (e.g. on
+    // body after clicking empty space): the handler lives on window because
+    // render-root delegation never sees those events. Dispatch on body on
+    // purpose — it bubbles past the render root straight to window.
+    key(document.body, "n");
+    // The add row lives directly under the column, outside .column-body.
+    const addInput = await waitFor(1000, () => {
+      const el = document.querySelector(
+        ".column .text-input",
+      ) as HTMLInputElement | null;
+      return el && document.activeElement === el ? el : null;
+    });
+    expect(addInput?.placeholder).toMatch("New todo");
+    key(addInput!, "Escape");
+    await waitFor(1000, () =>
+      !document.querySelector(".column .text-input") ? document.body : null,
+    );
+    expect(document.querySelector(".column .text-input")).toBeNull();
+
+    // No focus yet: arrows enter the board at the first card.
+    key(document.body, "ArrowDown");
     expect((await waitFor(1000, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
 
     // Down/Up navigate within the column without moving anything.
@@ -77,7 +98,7 @@ describe("keyboard arrows", () => {
     // Escape blurs; arrows return to the last card.
     key(card("t1"), "Escape");
     expect(document.activeElement).toBe(document.body);
-    key(document.querySelector(".board") as HTMLElement, "ArrowDown");
+    key(document.body, "ArrowDown");
     expect((await waitFor(1000, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
   });
 });
