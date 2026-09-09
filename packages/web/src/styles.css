@@ -1,0 +1,299 @@
+/* Dense Linear-like dark theme. Minimal spacing by design. */
+:root {
+  --bg: #0f1115;
+  --panel: #16191f;
+  --card: #1d2129;
+  --border: #262b34;
+  --text: #e6e8ec;
+  --text-dim: #9aa0ab;
+  --text-faint: #6b7280;
+  --accent: #5b8cff;
+  --danger: #e5534b;
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* --- Home --------------------------------------------------------------- */
+.home {
+  max-width: 420px;
+  margin: 15vh auto 0;
+  padding: 0 12px;
+}
+
+.home h1 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+
+.home-create {
+  display: flex;
+  gap: 8px;
+}
+
+.recents {
+  margin-top: 24px;
+}
+
+.recents-title {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.recent-link {
+  display: block;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-link:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* --- Board --------------------------------------------------------------- */
+.board {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.reconnect {
+  background: #7a5c14;
+  color: #ffe9b3;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.project-title {
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
+}
+
+.project-title:hover {
+  background: var(--panel);
+}
+
+.title-input {
+  font: inherit;
+  font-weight: 600;
+}
+
+.topbar .btn {
+  margin-left: auto;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 8px 12px 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.column-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text-dim);
+  font-weight: 600;
+  flex: none;
+}
+
+.count {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.muted .column-head {
+  color: var(--text-faint);
+}
+
+.column-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px 24px;
+  flex: 1;
+  min-height: 40px;
+}
+
+/* --- Cards --------------------------------------------------------------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+
+.card:focus {
+  border-color: var(--accent);
+}
+
+.card.pending {
+  opacity: 0.55;
+}
+
+.card.dragging {
+  opacity: 0.4;
+}
+
+.card.flash {
+  animation: flash 650ms ease-out;
+}
+
+.muted .card {
+  color: var(--text-dim);
+}
+
+@keyframes flash {
+  0% {
+    border-color: var(--accent);
+    background: #25304a;
+  }
+  100% {
+    border-color: var(--border);
+  }
+}
+
+.add-row {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font: inherit;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex: none;
+}
+
+.add-row:hover {
+  background: var(--panel);
+  color: var(--text-dim);
+}
+
+.text-input {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+}
+
+.card-input {
+  flex: none;
+}
+
+.drop-line {
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  flex: none;
+}
+
+.drop-empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  min-height: 60px;
+}
+
+/* --- Buttons, misc -------------------------------------------------------- */
+.btn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font: inherit;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.btn.small {
+  padding: 4px 10px;
+}
+
+.center {
+  margin: 20vh auto 0;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.center .btn {
+  display: inline-block;
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: repeat(4, 280px);
+    overflow-x: auto;
+  }
+}

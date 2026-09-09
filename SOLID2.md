@@ -188,9 +188,11 @@ serves the built app directly, so no metaframework is involved either way.
 
 ## 11. Implications for This Project
 
-- **Optimistic UI:** use `createOptimisticStore` + `action()` for rename/move/create.
-  The action body (local write, `yield` server call, `refresh`) implements the
-  DESIGN.md "server echo is truth" rule almost verbatim.
+- **Optimistic UI:** manual optimistic updates over a todo array with pending flags
+  and rollback, reconciled by the SSE server echo. `createOptimisticStore` +
+  `action()` were evaluated, but `refresh()`-based revalidation duplicates what
+  the SSE echo already does, so the thinner manual path won (fewer RC API
+  surface, same UX).
 - **SSE stream:** consume events into signals; derive per-column lists with memos
   (`createSignal(fn)` / `createProjection` keyed by todo id). Per-card updates stay
   fine-grained, which is Solid's core strength.

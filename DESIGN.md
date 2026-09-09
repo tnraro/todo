@@ -80,6 +80,9 @@ Create position: top of the `todo` column. A create without explicit neighbors d
 
 ## 5. API Contract
 
+All routes are served under the `/api` prefix (e.g. `POST /api/projects`).
+The paths below omit the prefix for brevity.
+
 ### Snapshot
 
 - `POST /projects { title }` -> `{ id, title }`. Client redirects to `/p/:id`.
