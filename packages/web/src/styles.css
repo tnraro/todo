@@ -264,9 +264,10 @@ body {
   position: fixed;
   right: 12px;
   bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: center;
   background: rgba(22, 25, 31, 0.92);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -277,13 +278,6 @@ body {
   z-index: 10;
 }
 
-.hud-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
 .hud kbd {
   background: var(--card);
   border: 1px solid var(--border);
@@ -291,6 +285,8 @@ body {
   padding: 0 4px;
   font: inherit;
   color: var(--text-dim);
+  justify-self: start;
+  white-space: nowrap;
 }
 
 /* --- Buttons, misc -------------------------------------------------------- */

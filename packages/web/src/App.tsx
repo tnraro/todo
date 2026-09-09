@@ -875,37 +875,28 @@ function Board(props: { projectId: string }) {
             </div>
             <div class="hud" aria-hidden="true">
               <Show when={focusKind() === "idle"}>
-                <span class="hud-item">
-                  <kbd>n</kbd> new
-                </span>
-                <span class="hud-item">
-                  <kbd>←→↑↓</kbd> board
-                </span>
+                <kbd>n</kbd>
+                <span>new</span>
+                <kbd>←→↑↓</kbd>
+                <span>board</span>
               </Show>
               <Show when={focusKind() === "card"}>
-                <span class="hud-item">
-                  <kbd>enter</kbd> edit
-                </span>
-                <span class="hud-item">
-                  <kbd>←→↑↓</kbd> move
-                </span>
-                <span class="hud-item">
-                  <kbd>ctrl ←→</kbd> column
-                </span>
-                <span class="hud-item">
-                  <kbd>ctrl ↑↓</kbd> reorder
-                </span>
-                <span class="hud-item">
-                  <kbd>del</kbd> archive
-                </span>
+                <kbd>enter</kbd>
+                <span>edit</span>
+                <kbd>←→↑↓</kbd>
+                <span>move</span>
+                <kbd>ctrl ←→</kbd>
+                <span>column</span>
+                <kbd>ctrl ↑↓</kbd>
+                <span>reorder</span>
+                <kbd>del</kbd>
+                <span>archive</span>
               </Show>
               <Show when={focusKind() === "text"}>
-                <span class="hud-item">
-                  <kbd>enter</kbd> save
-                </span>
-                <span class="hud-item">
-                  <kbd>esc</kbd> cancel
-                </span>
+                <kbd>enter</kbd>
+                <span>save</span>
+                <kbd>esc</kbd>
+                <span>cancel</span>
               </Show>
             </div>
           </>
