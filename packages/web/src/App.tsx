@@ -33,6 +33,21 @@ function byRank(a: Todo, b: Todo): number {
   return a.id < b.id ? -1 : 1;
 }
 
+/**
+ * Focus an input mounted by a conditional branch. A ref callback can fire
+ * before insertion, or its focus can be lost when the previously focused node
+ * is removed by the same update. Waiting a frame with an isConnected guard
+ * fixes both without ever stealing focus (unmounted inputs are skipped).
+ */
+function settleFocus(el: HTMLInputElement, selectAll = false): void {
+  requestAnimationFrame(() => {
+    if (!el.isConnected) return;
+    el.focus();
+    if (selectAll) el.select();
+    else el.setSelectionRange(el.value.length, el.value.length);
+  });
+}
+
 // --- Recents (localStorage only; the server knows no users) -----------------
 const RECENTS_KEY = "todo.recents";
 
@@ -581,10 +596,7 @@ function Board(props: { projectId: string }) {
                         );
                       }
                     }}
-                    ref={(el) => {
-                      el.focus();
-                      el.select();
-                    }}
+                    ref={(el) => settleFocus(el, true)}
                   />
                 }
               >
@@ -766,7 +778,7 @@ function Column(props: ColumnProps) {
               if (e.key === "Enter") props.onCommitAdd(props.addDraft);
             }}
             onBlur={props.onCancelAdd}
-            ref={(el) => el.focus()}
+            ref={(el) => settleFocus(el)}
           />
         </Show>
       </Show>
@@ -815,11 +827,7 @@ function Column(props: ColumnProps) {
                     if (e.key === "Enter") props.onCommitEdit(todo.id, true);
                   }}
                   onBlur={() => props.onCommitEdit(todo.id, false)}
-                  ref={(el) => {
-                    el.focus();
-                    if (props.selectAll) el.select();
-                    else el.setSelectionRange(el.value.length, el.value.length);
-                  }}
+                  ref={(el) => settleFocus(el, props.selectAll)}
                 />
               </Show>
               <Show
