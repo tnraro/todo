@@ -350,7 +350,7 @@ body {
   white-space: nowrap;
 }
 
-/* --- Action sheet (touch long-press) --------------------------------------- */
+/* --- Action sheet (card context menu) -------------------------------------- */
 .sheet-scrim {
   position: fixed;
   inset: 0;

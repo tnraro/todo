@@ -160,6 +160,9 @@ export async function mountApp(
   disposeRoot?.();
   document.body.innerHTML = '<div id="app"></div>';
   disposeRoot = render(() => <App />, document.getElementById("app")!);
+  // Twice: boot opens IndexedDB before the snapshot fetch, so one frame is
+  // often not enough for the first paint.
+  await settle();
   await settle();
 }
 

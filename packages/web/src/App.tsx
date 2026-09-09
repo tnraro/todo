@@ -847,65 +847,20 @@ function Board(props: { projectId: string }) {
     setFocusedId(id);
   }
 
-  // --- Touch long-press menu ------------------------------------------------
-  // Native DnD never fires for touch, so a 500ms hold opens an action sheet
-  // wired to the same ops as the keyboard. Mouse pointers are ignored.
+  // --- Touch context menu ---------------------------------------------------
+  // A touch hold fires contextmenu; desktop right-click does too. Both open
+  // the action sheet instead of the browser menu, wired to the same ops as
+  // the keyboard. No timers: the platform owns hold detection. Inputs keep
+  // their native menu (paste) since the handler lives on cards only.
   const [menuFor, setMenuFor] = createSignal<string | null>(null);
-  const holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  const holdPos = new Map<string, { x: number; y: number }>();
-  let longPressedId: string | null = null;
-  const HOLD_MS = 500;
-  const HOLD_PX = 12;
 
-  function holdClear(id: string): void {
-    const timer = holdTimers.get(id);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      holdTimers.delete(id);
+  function onCardContextMenu(id: string): void {
+    try {
+      (navigator as Navigator & { vibrate?: (p: number) => boolean }).vibrate?.(10);
+    } catch {
+      // Haptics are a nicety; the menu opens regardless.
     }
-    holdPos.delete(id);
-  }
-
-  function onHoldStart(id: string, e: PointerEvent): void {
-    if (e.pointerType !== "touch") return;
-    holdClear(id);
-    holdPos.set(id, { x: e.clientX, y: e.clientY });
-    holdTimers.set(
-      id,
-      setTimeout(() => {
-        holdTimers.delete(id);
-        holdPos.delete(id);
-        longPressedId = id;
-        try {
-          (navigator as Navigator & { vibrate?: (p: number) => boolean }).vibrate?.(10);
-        } catch {
-          // Haptics are a nicety; the menu opens regardless.
-        }
-        setMenuFor(id);
-      }, HOLD_MS),
-    );
-  }
-
-  function onHoldMove(id: string, e: PointerEvent): void {
-    const start = holdPos.get(id);
-    if (!start) return;
-    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > HOLD_PX) {
-      holdClear(id); // scrolling, not holding
-    }
-  }
-
-  function onHoldEnd(id: string): void {
-    holdClear(id);
-  }
-
-  function onCardClick(id: string): void {
-    // The pointerup after a long-press fires click on the card; swallow it
-    // once so the menu isn't instantly replaced by the editor.
-    if (longPressedId === id) {
-      longPressedId = null;
-      return;
-    }
-    startEdit(id);
+    setMenuFor(id);
   }
 
   /** HUD mode: which shortcuts are currently available. */
@@ -1284,11 +1239,9 @@ function Board(props: { projectId: string }) {
                     onDraft={(id, text) =>
                       setDrafts((d) => ({ ...d, [id]: text }))
                     }
-                    onCardClick={onCardClick}
+                    onStartEdit={startEdit}
+                    onContextMenu={onCardContextMenu}
                     onCommitEdit={commitEdit}
-                    onHoldStart={onHoldStart}
-                    onHoldMove={onHoldMove}
-                    onHoldEnd={onHoldEnd}
                     pending={pending()}
                     flashes={flashes()}
                     dropPos={dropPos()}
@@ -1390,11 +1343,9 @@ interface ColumnProps {
   selectAll: boolean;
   drafts: Record<string, string>;
   onDraft: (id: string, text: string) => void;
-  onCardClick: (id: string) => void;
+  onStartEdit: (id: string) => void;
+  onContextMenu: (id: string) => void;
   onCommitEdit: (id: string, refocus: boolean) => void;
-  onHoldStart: (id: string, e: PointerEvent) => void;
-  onHoldMove: (id: string, e: PointerEvent) => void;
-  onHoldEnd: (id: string) => void;
   pending: Record<string, true>;
   flashes: Record<string, number>;
   dropPos: { status: Status; beforeId: string | null; afterId: string | null } | null;
@@ -1517,12 +1468,12 @@ function Column(props: ColumnProps) {
                       props.onDragStartCard(todo.id);
                     }}
                     onDragEnd={props.onDragEndCard}
-                    onClick={() => props.onCardClick(todo.id)}
-                    onDblClick={() => props.onCardClick(todo.id)}
-                    onPointerDown={(e) => props.onHoldStart(todo.id, e)}
-                    onPointerUp={() => props.onHoldEnd(todo.id)}
-                    onPointerMove={(e) => props.onHoldMove(todo.id, e)}
-                    onPointerCancel={() => props.onHoldEnd(todo.id)}
+                    onClick={() => props.onStartEdit(todo.id)}
+                    onDblClick={() => props.onStartEdit(todo.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      props.onContextMenu(todo.id);
+                    }}
                   >
                     {todo.title}
                   </div>
