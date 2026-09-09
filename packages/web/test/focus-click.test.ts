@@ -27,6 +27,8 @@ describe("todo click focuses edit input", () => {
     expect(input?.tagName).toBe("INPUT");
     // The edit draft starts from the card title, ready to type over.
     expect(input?.value).toBe("hello");
+    // Text focused: only save/cancel apply.
+    expect(document.querySelector(".hud")?.textContent).toMatch("save");
   });
 });
 

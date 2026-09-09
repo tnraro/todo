@@ -156,6 +156,7 @@ function Board(props: { projectId: string }) {
     afterId: string | null;
   } | null>(null);
   const [draggingId, setDraggingId] = createSignal<string | null>(null);
+  const [focusKind, setFocusKind] = createSignal<FocusKind>("idle");
 
   let lastRev = 0;
   let pendingRemoteTitle: string | null = null;
@@ -596,6 +597,16 @@ function Board(props: { projectId: string }) {
     if (id) lastCardId = id;
   }
 
+  /** HUD mode: which shortcuts are currently available. */
+  type FocusKind = "idle" | "card" | "text";
+
+  function focusKindOf(el: HTMLElement | null): FocusKind {
+    const tag = el?.tagName ?? "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return "text";
+    if (el?.closest?.("[data-todo-id]")) return "card";
+    return "idle";
+  }
+
   /**
    * Keyboard navigation: plain arrows move focus between cards, never data.
    * Vertical moves within the column; horizontal skips over empty columns to
@@ -693,6 +704,23 @@ function Board(props: { projectId: string }) {
   window.addEventListener("keydown", onBoardKeyDown);
   onCleanup(() => window.removeEventListener("keydown", onBoardKeyDown));
 
+  // Focus tracking for the HUD and bare-arrow entry. focusout fires before
+  // the next focusin; Solid batches both, so only the final kind paints.
+  function onFocusTrack(e: FocusEvent): void {
+    if (e.type === "focusout") {
+      setFocusKind("idle");
+      return;
+    }
+    noteFocus(e);
+    setFocusKind(focusKindOf(e.target as HTMLElement | null));
+  }
+  window.addEventListener("focusin", onFocusTrack);
+  window.addEventListener("focusout", onFocusTrack);
+  onCleanup(() => {
+    window.removeEventListener("focusin", onFocusTrack);
+    window.removeEventListener("focusout", onFocusTrack);
+  });
+
   // --- Boot (once per page load; navigations are full reloads) ---------------
   fetchSnapshot(pid)
     .then((snap) => {
@@ -712,7 +740,7 @@ function Board(props: { projectId: string }) {
     });
 
   return (
-    <div class="board" onFocusIn={noteFocus}>
+    <div class="board">
       <Show when={conn() === "reconnecting" && state() === "ready"}>
         <div class="reconnect">Reconnecting…</div>
       </Show>
@@ -844,6 +872,41 @@ function Board(props: { projectId: string }) {
                   />
                 )}
               </For>
+            </div>
+            <div class="hud" aria-hidden="true">
+              <Show when={focusKind() === "idle"}>
+                <span class="hud-item">
+                  <kbd>n</kbd> new
+                </span>
+                <span class="hud-item">
+                  <kbd>←→↑↓</kbd> board
+                </span>
+              </Show>
+              <Show when={focusKind() === "card"}>
+                <span class="hud-item">
+                  <kbd>enter</kbd> edit
+                </span>
+                <span class="hud-item">
+                  <kbd>←→↑↓</kbd> move
+                </span>
+                <span class="hud-item">
+                  <kbd>ctrl ←→</kbd> column
+                </span>
+                <span class="hud-item">
+                  <kbd>ctrl ↑↓</kbd> reorder
+                </span>
+                <span class="hud-item">
+                  <kbd>del</kbd> archive
+                </span>
+              </Show>
+              <Show when={focusKind() === "text"}>
+                <span class="hud-item">
+                  <kbd>enter</kbd> save
+                </span>
+                <span class="hud-item">
+                  <kbd>esc</kbd> cancel
+                </span>
+              </Show>
             </div>
           </>
         )}

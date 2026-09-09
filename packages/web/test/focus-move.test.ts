@@ -39,6 +39,11 @@ describe("keyboard arrows", () => {
 
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
+    const hud = (): string =>
+      document.querySelector(".hud")?.textContent ?? "";
+
+    // Idle: only global shortcuts apply.
+    expect(hud()).toMatch("new");
 
     // Global shortcuts must work with focus outside the app tree (e.g. on
     // body after clicking empty space): the handler lives on window because
@@ -62,6 +67,8 @@ describe("keyboard arrows", () => {
     // No focus yet: arrows enter the board at the first card.
     key(document.body, "ArrowDown");
     expect((await waitFor(1000, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
+    // Card focused: card shortcuts apply.
+    expect(hud()).toMatch("edit");
 
     // Down/Up navigate within the column without moving anything.
     card("t1").focus();

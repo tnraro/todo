@@ -259,6 +259,39 @@ body {
   min-height: 60px;
 }
 
+/* --- HUD ------------------------------------------------------------------- */
+.hud {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 10px;
+  background: rgba(22, 25, 31, 0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.hud kbd {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  font: inherit;
+  color: var(--text-dim);
+}
+
 /* --- Buttons, misc -------------------------------------------------------- */
 .btn {
   background: var(--accent);
@@ -295,5 +328,10 @@ body {
   .columns {
     grid-template-columns: repeat(4, 280px);
     overflow-x: auto;
+  }
+  .hud {
+    font-size: 10px;
+    right: 8px;
+    bottom: 8px;
   }
 }
