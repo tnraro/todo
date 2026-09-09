@@ -470,6 +470,12 @@ body {
   .columns {
     grid-template-columns: repeat(4, 280px);
     overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 12px;
+    overscroll-behavior-x: contain;
+  }
+  .column {
+    scroll-snap-align: start;
   }
   .hud {
     font-size: 10px;

@@ -180,7 +180,8 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - Four equal columns, 8px column gap, 12px page side padding. Card padding `6px 8px`, radius 6px, font 13px, line-height 1.35.
 - Card content is a one-line truncated title. No wrapping. Long titles show on hover tooltip and expand inline on click-to-edit.
 - `archive` is muted visually (gray text, low contrast) but functionally identical. Always visible as the fourth column. No collapse.
-- Mobile: horizontal scroll with fixed 280px column width. No stacked reflow.
+- Mobile: horizontal scroll with fixed 280px column width and mandatory
+  column snap. No stacked reflow.
   Touch: native DnD never fires for touch, so a card hold (or desktop
   right-click) opens a bottom action sheet via the `contextmenu` event
   (browser menu suppressed) with edit, move left/right/up/down,
