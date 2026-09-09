@@ -5,7 +5,9 @@ import type { Server } from "bun";
 import {
   PROJECT_TITLE_MAX,
   TODO_TITLE_MAX,
+  generateProjectId,
   isStatus,
+  keyBetween,
   normalizeNeighborId,
   normalizeTitle,
   normalizeTodoId,
@@ -14,7 +16,6 @@ import {
 } from "@todo/shared";
 import { type Db, openDb } from "./db";
 import { EventHub } from "./events";
-import { generateProjectId, keyBetween } from "./rank";
 
 export interface AppOptions {
   hub?: EventHub;

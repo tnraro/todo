@@ -1,6 +1,6 @@
 // Unit tests for fractional rank keys and project id generation.
 import { describe, expect, test } from "bun:test";
-import { firstRank, generateProjectId, keyBetween } from "../src/rank";
+import { firstRank, generateProjectId, keyBetween } from "@todo/shared";
 
 function between(a: string | null, b: string | null): string {
   const k = keyBetween(a, b);

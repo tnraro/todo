@@ -163,7 +163,11 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - `n` or per-column `+ Add`: creates an input row at the top of `todo` with focus. Enter saves, Esc cancels. Enter on empty input cancels.
 - Card click: inline edit. Enter or blur saves; Esc restores. Blur on empty input restores instead of saving.
 - Drag: native DnD. 2px insertion line at drop position. Optimistic move on drop.
-- Keyboard move: with a card selected, `Left/Right` moves status (server heals rank at the destination edge), `Ctrl+Up/Down` reorders within the column.
+- Keyboard move: with a card selected, plain arrows navigate focus between
+  cards (`Up/Down` within the column, `Left/Right` to the same position in the
+  adjacent column, clamped at the edges). With `Ctrl` held, the arrows move the
+  todo instead (`Left/Right` across columns, `Up/Down` reorder within the
+  column). Focus follows the moved card.
 - Project title: click-to-edit inline. While focused, incoming remote renames wait until blur, then apply with a flash instead of clobbering typing.
 - Copy link: copies URL, shows "Copied" toast for 1s. No other toasts.
 - Empty column: no "No items" placeholder. Empty space is the drop zone; only the `+ Add` row exists.

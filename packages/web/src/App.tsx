@@ -4,6 +4,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import {
   STATUSES,
+  keyBetween,
   type Project,
   type ServerEvent,
   type Status,
@@ -213,9 +214,43 @@ function Board(props: { projectId: string }) {
     }, 650);
   }
 
+  /**
+   * Central todos writer. Row identity changes remount the card element, which
+   * drops a focused card: keyboard moves (necessarily a new row in a possibly
+   * different column), REST echos, and remote moves. When the update replaces
+   * the focused card, restore focus to it next frame — but only when focus was
+   * truly lost, never stealing it from wherever the user moved it.
+   */
+  function applyTodos(next: Todo[] | ((prev: Todo[]) => Todo[])): void {
+    const active = document.activeElement as HTMLElement | null;
+    const focusedId = active?.dataset?.todoId ?? null;
+    const prev = todos();
+    const list = typeof next === "function" ? next(prev) : next;
+    if (focusedId === null) {
+      setTodos(list);
+      return;
+    }
+    const before = prev.find((t) => t.id === focusedId);
+    const after = list.find((t) => t.id === focusedId);
+    setTodos(list); // raw setter: this function IS the wrapper, do not recurse
+    if (!before || !after || after === before) return;
+    requestAnimationFrame(() => {
+      // Restore only a truly lost focus: body, null, or a node detached by
+      // the very remount we just did. Liveness is tested against the live
+      // tree (document.contains), never the node's own flags. Anything live
+      // holding focus keeps it — never steal from inputs.
+      const cur = document.activeElement as HTMLElement | null;
+      if (cur && cur !== document.body && document.contains(cur)) return;
+      const el = document.querySelector(
+        `[data-todo-id="${CSS.escape(focusedId)}"]`,
+      );
+      (el as HTMLElement | null)?.focus?.();
+    });
+  }
+
   function applySnapshotTodos(next: Todo[]): void {
     const { list, changed } = mergeTodos(todos(), next);
-    setTodos(list);
+    applyTodos(list);
     flash(changed);
   }
 
@@ -229,7 +264,7 @@ function Board(props: { projectId: string }) {
           ? [...prev, todo]
           : [...prev.slice(0, idx), todo, ...prev.slice(idx + 1)];
       const { list, changed } = mergeTodos(prev, next);
-      setTodos(list);
+      applyTodos(list);
       flash(changed);
     }
     setPending((p) => {
@@ -282,7 +317,7 @@ function Board(props: { projectId: string }) {
         ? [...prev, event.todo]
         : [...prev.slice(0, idx), event.todo, ...prev.slice(idx + 1)];
     const { list, changed } = mergeTodos(prev, next);
-    setTodos(list);
+    applyTodos(list);
     flash(changed);
   }
 
@@ -312,12 +347,12 @@ function Board(props: { projectId: string }) {
       rank: "",
       updatedAt: 0,
     };
-    setTodos((prev) => [optimistic, ...prev]);
+    applyTodos((prev) => [optimistic, ...prev]);
     markPending(id);
     void createTodo(pid, { id, title: clean })
       .then(({ todo, rev }) => acceptTodo(todo, rev))
       .catch(() => {
-        setTodos((prev) => prev.filter((t) => t.id !== id));
+        applyTodos((prev) => prev.filter((t) => t.id !== id));
         unmarkPending(id);
       });
   }
@@ -326,12 +361,12 @@ function Board(props: { projectId: string }) {
     const clean = title.trim();
     const prev = todos().find((t) => t.id === id);
     if (!prev || prev.title === clean || !clean) return;
-    setTodos((list) => list.map((t) => (t.id === id ? { ...t, title: clean } : t)));
+    applyTodos((list) => list.map((t) => (t.id === id ? { ...t, title: clean } : t)));
     markPending(id);
     void renameTodo(pid, id, clean)
       .then(({ todo, rev }) => acceptTodo(todo, rev))
       .catch(() => {
-        setTodos((list) => list.map((t) => (t.id === id ? prev : t)));
+        applyTodos((list) => list.map((t) => (t.id === id ? prev : t)));
         unmarkPending(id);
       });
   }
@@ -352,14 +387,36 @@ function Board(props: { projectId: string }) {
     else if (beforeId) idx = target.findIndex((t) => t.id === beforeId) + 1;
     else idx = 0;
     if (idx < 0) idx = beforeId ? target.length : 0;
-    const moved: Todo = { ...moving, status: toStatus };
+    // Estimate the rank the server will assign so the optimistic card sorts
+    // into place immediately; the echo overwrites with the authority.
+    // Mirrors the server rule: unknown neighbors heal to open ends, and both
+    // open ends mean the top of the column.
+    const rankOf = (nid: string | null): string | null =>
+      nid ? (target.find((t) => t.id === nid)?.rank ?? null) : null;
+    const beforeRank = rankOf(beforeId);
+    let afterRank = rankOf(afterId);
+    if (beforeRank === null && afterRank === null) {
+      afterRank = target[0]?.rank ?? null;
+    }
+    if (
+      beforeRank !== null &&
+      afterRank !== null &&
+      beforeRank >= afterRank
+    ) {
+      afterRank = null;
+    }
+    const moved: Todo = {
+      ...moving,
+      status: toStatus,
+      rank: keyBetween(beforeRank, afterRank),
+    };
     const newTarget = [...target.slice(0, idx), moved, ...target.slice(idx)];
-    setTodos([...rest.filter((t) => t.status !== toStatus), ...newTarget]);
+    applyTodos([...rest.filter((t) => t.status !== toStatus), ...newTarget]);
     markPending(id);
     void moveTodo(pid, id, toStatus, beforeId, afterId)
       .then(({ todo, rev }) => acceptTodo(todo, rev))
       .catch(() => {
-        setTodos(prevList);
+        applyTodos(prevList);
         unmarkPending(id);
       });
   }
@@ -475,6 +532,35 @@ function Board(props: { projectId: string }) {
     );
   }
 
+  function focusCard(id: string): void {
+    const el = document.querySelector(`[data-todo-id="${CSS.escape(id)}"]`);
+    (el as HTMLElement | null)?.focus?.();
+  }
+
+  /**
+   * Keyboard navigation: plain arrows move focus between cards, never data.
+   * Vertical moves within the column; horizontal moves to the same position
+   * in the adjacent column. Clamped at the edges; empty columns are skipped
+   * by staying put.
+   */
+  function focusNeighbor(id: string, dir: 1 | -1, axis: "x" | "y"): void {
+    const todo = todos().find((t) => t.id === id);
+    if (!todo) return;
+    if (axis === "y") {
+      const col = columns()[todo.status];
+      const j = col.findIndex((t) => t.id === id) + dir;
+      if (j < 0 || j >= col.length) return;
+      focusCard(col[j].id);
+      return;
+    }
+    const ni = STATUSES.indexOf(todo.status) + dir;
+    if (ni < 0 || ni >= STATUSES.length) return;
+    const target = columns()[STATUSES[ni]];
+    if (target.length === 0) return;
+    const srcIdx = columns()[todo.status].findIndex((t) => t.id === id);
+    focusCard(target[Math.min(srcIdx, target.length - 1)].id);
+  }
+
   function onBoardKeyDown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     const inInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
@@ -497,18 +583,16 @@ function Board(props: { projectId: string }) {
     if (e.key === "Enter") {
       e.preventDefault();
       startEdit(id);
-    } else if (e.key === "ArrowRight" && !e.ctrlKey && !e.metaKey) {
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
-      moveStatus(id, 1);
-    } else if (e.key === "ArrowLeft" && !e.ctrlKey && !e.metaKey) {
+      const dir: 1 | -1 = e.key === "ArrowRight" ? 1 : -1;
+      if (e.ctrlKey || e.metaKey) moveStatus(id, dir);
+      else focusNeighbor(id, dir, "x");
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      moveStatus(id, -1);
-    } else if (
-      (e.ctrlKey || e.metaKey) &&
-      (e.key === "ArrowUp" || e.key === "ArrowDown")
-    ) {
-      e.preventDefault();
-      reorder(id, e.key === "ArrowUp" ? -1 : 1);
+      const dir: 1 | -1 = e.key === "ArrowUp" ? -1 : 1;
+      if (e.ctrlKey || e.metaKey) reorder(id, dir);
+      else focusNeighbor(id, dir, "y");
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       startEdit(id, e.key);
@@ -519,7 +603,7 @@ function Board(props: { projectId: string }) {
   fetchSnapshot(pid)
     .then((snap) => {
       setProject(snap.project);
-      setTodos(snap.todos);
+      applyTodos(snap.todos);
       lastRev = snap.rev;
       setState("ready");
       saveRecent(snap.project);
