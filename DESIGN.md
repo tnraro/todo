@@ -22,6 +22,9 @@ Non-goals (YAGNI, will not build):
 - Package manager: Bun workspaces in a single repo.
 - Layout (three packages max, YAGNI): `packages/web` (SolidJS app), `packages/server` (Bun API, SSE, store), `packages/shared` (request/response types and validation used by both sides, single source of truth).
 - Persistence is a server-local store with no external DB service. Exact engine is an implementation detail; the contract is a portable single-artifact deploy with one writer order so the per-project atomic `rev` increment defines LWW order.
+- Deploy: multi-stage `Dockerfile` (build web, ship server sources + `dist` on
+  `oven/bun:1-slim`). SQLite lives at `/data` (volume). Unverified: no docker
+  access in this environment; run `docker build -t todo .` before shipping.
 
 ## 3. Offline / PWA (local-first step 1)
 

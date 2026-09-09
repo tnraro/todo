@@ -1,0 +1,8 @@
+node_modules
+packages/web/dist
+packages/web/dist-focus
+packages/server/data
+data
+.git
+tmp
+*.db*
