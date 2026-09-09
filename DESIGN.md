@@ -165,7 +165,8 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - Drag: native DnD. 2px insertion line at drop position. Optimistic move on drop.
 - Keyboard move: with a card selected, plain arrows navigate focus between
   cards (`Up/Down` within the column, `Left/Right` to the same position in the
-  adjacent column, clamped at the edges). With `Ctrl` held, the arrows move the
+  next populated column, skipping empty ones, clamped past the edges). With
+  `Ctrl` held, the arrows move the
   todo instead (`Left/Right` across columns, `Up/Down` reorder within the
   column). Focus follows the moved card. With nothing focused, arrows enter the
   board at the last focused card, or the first card when unknown.

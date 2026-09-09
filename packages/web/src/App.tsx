@@ -560,9 +560,9 @@ function Board(props: { projectId: string }) {
 
   /**
    * Keyboard navigation: plain arrows move focus between cards, never data.
-   * Vertical moves within the column; horizontal moves to the same position
-   * in the adjacent column. Clamped at the edges; empty columns are skipped
-   * by staying put.
+   * Vertical moves within the column; horizontal skips over empty columns to
+   * the next column with cards, landing at the same position. Clamped at the
+   * edges: nothing beyond the first/last populated column keeps focus put.
    */
   function focusNeighbor(id: string, dir: 1 | -1, axis: "x" | "y"): void {
     const todo = todos().find((t) => t.id === id);
@@ -574,10 +574,16 @@ function Board(props: { projectId: string }) {
       focusCard(col[j].id);
       return;
     }
-    const ni = STATUSES.indexOf(todo.status) + dir;
+    let ni = STATUSES.indexOf(todo.status) + dir;
+    while (
+      ni >= 0 &&
+      ni < STATUSES.length &&
+      columns()[STATUSES[ni]].length === 0
+    ) {
+      ni += dir;
+    }
     if (ni < 0 || ni >= STATUSES.length) return;
     const target = columns()[STATUSES[ni]];
-    if (target.length === 0) return;
     const srcIdx = columns()[todo.status].findIndex((t) => t.id === id);
     focusCard(target[Math.min(srcIdx, target.length - 1)].id);
   }
