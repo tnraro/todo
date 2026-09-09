@@ -3,7 +3,9 @@
 // second source of truth.
 import type { ServerEvent } from "@todo/shared";
 
-// Below Bun.serve's default idleTimeout (10s) so quiet streams stay open.
+// Heartbeat for middleboxes (nginx/ALB ~60s idle kills) and EventSource
+// half-open detection. Not for Bun's idleTimeout: that is disabled
+// server-wide (see index.ts) so streams never depend on it.
 const PING_INTERVAL_MS = 5_000;
 
 type Sink = (frame: string) => void;

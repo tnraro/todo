@@ -347,6 +347,15 @@ if (import.meta.main) {
   const app = createApp(db, {
     distDir: existsSync(distDir) ? distDir : null,
   });
-  Bun.serve({ port, fetch: app.fetch });
+  Bun.serve({
+    port,
+    fetch: app.fetch,
+    // SSE streams live for hours; Bun's default 10s idle timeout would kill
+    // them whenever pings (5s) stall past it. Disabled here instead of
+    // coupling to the default: flood protection stays at the rate limiter,
+    // and pings are still sent (middleboxes and half-open detection need
+    // traffic, which idleTimeout: 0 does not provide).
+    idleTimeout: 0,
+  });
   console.log(`todo server on http://localhost:${port} (db: ${dbPath})`);
 }
