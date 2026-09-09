@@ -125,6 +125,10 @@ body {
   margin-left: auto;
 }
 
+.topbar .locale-toggle {
+  margin-left: 0;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -308,6 +312,27 @@ body {
 
 .btn.small {
   padding: 4px 10px;
+}
+
+.locale-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.locale-toggle:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.home-locale {
+  margin-top: 24px;
 }
 
 .center {

@@ -22,13 +22,7 @@ import {
   renameTodo,
   subscribe,
 } from "./api";
-
-const STATUS_LABEL: Record<Status, string> = {
-  todo: "Todo",
-  doing: "Doing",
-  done: "Done",
-  archive: "Archive",
-};
+import { locale, setLocale, t } from "./i18n";
 
 function byRank(a: Todo, b: Todo): number {
   if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
@@ -78,6 +72,19 @@ function saveRecent(project: Project): void {
   }
 }
 
+// --- Locale toggle ----------------------------------------------------------
+function LocaleToggle() {
+  return (
+    <button
+      class="locale-toggle"
+      title={t().localeToggle.title}
+      onClick={() => setLocale(locale() === "en" ? "ko" : "en")}
+    >
+      {t().localeToggle.label}
+    </button>
+  );
+}
+
 // --- Home -------------------------------------------------------------------
 function Home() {
   const [title, setTitle] = createSignal("");
@@ -88,7 +95,7 @@ function Home() {
     if (busy()) return;
     setBusy(true);
     try {
-      const project = await createProject(title().trim() || "Untitled");
+      const project = await createProject(title().trim() || t().untitled);
       location.href = `/p/${project.id}`;
     } finally {
       setBusy(false);
@@ -101,7 +108,7 @@ function Home() {
       <div class="home-create">
         <input
           class="text-input"
-          placeholder="New project title…"
+          placeholder={t().home.titlePlaceholder}
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -110,21 +117,24 @@ function Home() {
           ref={(el) => el.focus()}
         />
         <button class="btn" disabled={busy()} onClick={() => void create()}>
-          New project
+          {t().home.newProject}
         </button>
       </div>
       <Show when={recents.length > 0}>
         <div class="recents">
-          <div class="recents-title">Recent</div>
+          <div class="recents-title">{t().home.recent}</div>
           <For each={recents}>
             {(r) => (
               <a class="recent-link" href={`/p/${r.id}`}>
-                {r.title || "Untitled"}
+                {r.title || t().untitled}
               </a>
             )}
           </For>
         </div>
       </Show>
+      <div class="home-locale">
+        <LocaleToggle />
+      </div>
     </div>
   );
 }
@@ -749,17 +759,17 @@ function Board(props: { projectId: string }) {
   return (
     <div class="board">
       <Show when={conn() === "reconnecting" && state() === "ready"}>
-        <div class="reconnect">Reconnecting…</div>
+        <div class="reconnect">{t().board.reconnecting}</div>
       </Show>
       <Show when={state() === "loading"}>
         <header class="topbar">
-          <div class="project-title">Loading…</div>
+          <div class="project-title">{t().board.loading}</div>
         </header>
         <div class="columns">
           <For each={STATUSES}>
             {(s) => (
               <section class="column">
-                <div class="column-head">{STATUS_LABEL[s]}</div>
+                <div class="column-head">{t().status[s]}</div>
               </section>
             )}
           </For>
@@ -767,17 +777,17 @@ function Board(props: { projectId: string }) {
       </Show>
       <Show when={state() === "missing"}>
         <div class="center">
-          <p>This link is invalid.</p>
+          <p>{t().board.invalidLink}</p>
           <a class="btn" href="/">
-            Create new project
+            {t().board.createNewProject}
           </a>
         </div>
       </Show>
       <Show when={state() === "failed"}>
         <div class="center">
-          <p>Failed to load. Check your connection.</p>
+          <p>{t().board.loadFailed}</p>
           <button class="btn" onClick={() => location.reload()}>
-            Retry
+            {t().board.retry}
           </button>
         </div>
       </Show>
@@ -815,7 +825,7 @@ function Board(props: { projectId: string }) {
               >
                 <button
                   class="project-title"
-                  title="Rename project"
+                  title={t().board.renameProject}
                   onClick={() => {
                     setProjectDraft(p().title);
                     setEditingProjectTitle(true);
@@ -836,8 +846,9 @@ function Board(props: { projectId: string }) {
                     .catch(() => {});
                 }}
               >
-                {copied() ? "Copied" : "Copy link"}
+                {copied() ? t().board.copied : t().board.copyLink}
               </button>
+              <LocaleToggle />
             </header>
             <div class="columns">
               <For each={STATUSES}>
@@ -883,27 +894,27 @@ function Board(props: { projectId: string }) {
             <div class="hud" aria-hidden="true">
               <Show when={focusKind() === "idle"}>
                 <kbd>n</kbd>
-                <span>new</span>
+                <span>{t().hud.new}</span>
                 <kbd>←→↑↓</kbd>
-                <span>board</span>
+                <span>{t().hud.board}</span>
               </Show>
               <Show when={focusKind() === "card"}>
                 <kbd>enter</kbd>
-                <span>edit</span>
+                <span>{t().hud.edit}</span>
                 <kbd>←→↑↓</kbd>
-                <span>move</span>
+                <span>{t().hud.move}</span>
                 <kbd>ctrl ←→</kbd>
-                <span>column</span>
+                <span>{t().hud.column}</span>
                 <kbd>ctrl ↑↓</kbd>
-                <span>reorder</span>
+                <span>{t().hud.reorder}</span>
                 <kbd>del</kbd>
-                <span>{focusedStatus() === "archive" ? "delete" : "archive"}</span>
+                <span>{focusedStatus() === "archive" ? t().hud.delete : t().hud.archive}</span>
               </Show>
               <Show when={focusKind() === "text"}>
                 <kbd>enter</kbd>
-                <span>save</span>
+                <span>{t().hud.save}</span>
                 <kbd>esc</kbd>
-                <span>cancel</span>
+                <span>{t().hud.cancel}</span>
               </Show>
             </div>
           </>
@@ -996,7 +1007,7 @@ function Column(props: ColumnProps) {
       }}
     >
       <div class="column-head">
-        {STATUS_LABEL[props.status]}
+        {t().status[props.status]}
         <span class="count">{props.todos.length}</span>
       </div>
       <Show when={props.status === "todo"}>
@@ -1004,13 +1015,13 @@ function Column(props: ColumnProps) {
           when={props.adding}
           fallback={
             <button class="add-row" onClick={props.onStartAdd}>
-              + Add
+              {t().column.add}
             </button>
           }
         >
           <input
             class="text-input card-input"
-            placeholder="New todo, Enter to add…"
+            placeholder={t().column.newTodoPlaceholder}
             value={props.addDraft}
             onInput={(e) => props.onAddDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
