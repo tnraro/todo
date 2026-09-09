@@ -853,14 +853,31 @@ function Board(props: { projectId: string }) {
   // the keyboard. No timers: the platform owns hold detection. Inputs keep
   // their native menu (paste) since the handler lives on cards only.
   const [menuFor, setMenuFor] = createSignal<string | null>(null);
+  const [menuAt, setMenuAt] = createSignal<{ x: number; y: number } | null>(null);
+  // Desktop dropdown size estimate for viewport clamping.
+  const MENU_W = 230;
+  const MENU_H = 320;
 
-  function onCardContextMenu(id: string): void {
+  function openMenu(id: string, x: number, y: number): void {
     try {
       (navigator as Navigator & { vibrate?: (p: number) => boolean }).vibrate?.(10);
     } catch {
       // Haptics are a nicety; the menu opens regardless.
     }
+    setMenuAt({
+      x: Math.max(8, Math.min(x, window.innerWidth - MENU_W)),
+      y: Math.max(8, Math.min(y, window.innerHeight - MENU_H)),
+    });
     setMenuFor(id);
+  }
+
+  function closeMenu(): void {
+    setMenuFor(null);
+    setMenuAt(null);
+  }
+
+  function onCardContextMenu(id: string, x: number, y: number): void {
+    openMenu(id, x, y);
   }
 
   /** HUD mode: which shortcuts are currently available. */
@@ -908,7 +925,7 @@ function Board(props: { projectId: string }) {
     const tag = target?.tagName ?? "";
     const inInput = tag === "INPUT" || tag === "TEXTAREA";
     if (e.key === "Escape") {
-      setMenuFor(null);
+      closeMenu();
       cancelEdit();
       setAdding(false);
       setAddDraft("");
@@ -1289,13 +1306,20 @@ function Board(props: { projectId: string }) {
                   todos().find((td) => td.id === getId())?.status === "archive";
                 const act = (fn: (id: string) => void) => () => {
                   const id = getId();
-                  setMenuFor(null);
+                  closeMenu();
                   fn(id);
                 };
+                const at = menuAt() ?? { x: 8, y: 8 };
+                // Inline position feeds the desktop dropdown only; the mobile
+                // bottom sheet is positioned purely by CSS.
+                const pos =
+                  window.matchMedia?.("(min-width: 901px)").matches ?? false
+                    ? { left: `${at.x}px`, top: `${at.y}px` }
+                    : undefined;
                 return (
                   <>
-                    <div class="sheet-scrim" onClick={() => setMenuFor(null)} />
-                    <div class="sheet" role="menu">
+                    <div class="sheet-scrim" onClick={closeMenu} />
+                    <div class="sheet" role="menu" style={pos}>
                       <button class="sheet-item" onClick={act((id) => startEdit(id))}>
                         {t().menu.edit}
                       </button>
@@ -1344,7 +1368,7 @@ interface ColumnProps {
   drafts: Record<string, string>;
   onDraft: (id: string, text: string) => void;
   onStartEdit: (id: string) => void;
-  onContextMenu: (id: string) => void;
+  onContextMenu: (id: string, x: number, y: number) => void;
   onCommitEdit: (id: string, refocus: boolean) => void;
   pending: Record<string, true>;
   flashes: Record<string, number>;
@@ -1472,7 +1496,7 @@ function Column(props: ColumnProps) {
                     onDblClick={() => props.onStartEdit(todo.id)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      props.onContextMenu(todo.id);
+                      props.onContextMenu(todo.id, e.clientX, e.clientY);
                     }}
                   >
                     {todo.title}

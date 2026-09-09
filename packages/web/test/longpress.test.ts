@@ -29,8 +29,12 @@ describe("card context menu", () => {
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
     const sheetShown = () => document.querySelector(".sheet") as HTMLElement | null;
-    const openMenu = (id: string) => {
-      const event = new window.MouseEvent("contextmenu", { bubbles: true });
+    const openMenu = (id: string, x = 100, y = 120) => {
+      const event = new window.MouseEvent("contextmenu", {
+        bubbles: true,
+        clientX: x,
+        clientY: y,
+      });
       let defaultPrevented = false;
       const orig = event.preventDefault.bind(event);
       event.preventDefault = () => {
@@ -45,6 +49,17 @@ describe("card context menu", () => {
     expect(openMenu("h1")).toBe(true);
     await waitFor(1000, () => sheetShown() ?? null);
     expect(sheetShown()).toBeTruthy();
+    // happy-dom is 1024 wide: desktop dropdown anchored at the cursor.
+    const sheet = sheetShown()!;
+    expect(sheet.style.left).toBe("100px");
+    expect(sheet.style.top).toBe("120px");
+
+    // Off-screen cursors clamp into the viewport.
+    expect(openMenu("h1", 2000, 2000)).toBe(true);
+    await settle();
+    const clamped = sheetShown()!;
+    expect(parseInt(clamped.style.left)).toBeLessThan(2000);
+    expect(parseInt(clamped.style.top)).toBeLessThan(2000);
 
     // Move right one column (moves go adjacent, unlike focus skip).
     const right = [...document.querySelectorAll(".sheet-item")].find((el) =>

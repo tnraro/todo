@@ -184,7 +184,8 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
   Touch: native DnD never fires for touch, so a card hold (or desktop
   right-click) opens a bottom action sheet via the `contextmenu` event
   (browser menu suppressed) with edit, move left/right/up/down,
-  archive/delete — the same ops as the keyboard. Shortcut HUD hides on
+  archive/delete — the same ops as the keyboard. On wide screens (901px+)
+  the same menu renders as a cursor-anchored dropdown instead of a sheet. Shortcut HUD hides on
   hover-less devices; text inputs go 16px on coarse pointers (iOS auto-zoom
   guard).
 

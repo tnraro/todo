@@ -393,6 +393,26 @@ body {
   color: var(--danger);
 }
 
+/* Desktop: the same menu becomes a cursor-anchored dropdown. Position comes
+ * from the inline style; mobile keeps the bottom sheet above. */
+@media (min-width: 901px) {
+  .sheet {
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: max-content;
+    min-width: 200px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .sheet-item {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
+
 /* --- Buttons, misc -------------------------------------------------------- */
 .btn {
   background: var(--accent);
