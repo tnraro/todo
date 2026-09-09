@@ -6,15 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:focus": "vite build --config vite.focus.config.ts && bun test test/focus-click.test.ts && bun test test/focus-move.test.ts && bun test test/focus-skip.test.ts && bun test test/focus-delete.test.ts && bun test test/i18n.test.ts"
+    "test:focus": "vite build --config vite.focus.config.ts && bun test test/focus-click.test.ts && bun test test/focus-move.test.ts && bun test test/focus-skip.test.ts && bun test test/focus-delete.test.ts && bun test test/i18n.test.ts && bun test test/store.test.ts && bun test test/focus-cache.test.ts && bun test test/sync.test.ts && bun test test/focus-sync.test.ts && bun test test/forget.test.ts"
   },
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.7",
     "@todo/shared": "0.0.0",
+    "idb": "^8.0.3",
     "solid-js": "2.0.0-rc.7"
   },
   "devDependencies": {
     "@solidjs/vite-plugin": "3.0.0-next.40",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.14.0",
     "typescript": "7.0.2",
     "vite": "8.2.2",

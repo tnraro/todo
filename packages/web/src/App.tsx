@@ -1,7 +1,7 @@
 // Single-view kanban board. No client router: "/" renders Home, "/p/:id"
 // renders Board, navigations are real page loads. Server echo is truth;
 // local writes are optimistic with rollback on failure.
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import {
   STATUSES,
   keyBetween,
@@ -13,16 +13,18 @@ import {
 import {
   ApiError,
   createProject,
-  createTodo,
-  deleteTodo,
+  fetchLog,
   fetchSnapshot,
   genTodoId,
-  moveTodo,
-  renameProject,
-  renameTodo,
   subscribe,
 } from "./api";
+import { collapseOps, sendOp } from "./sync";
 import { locale, setLocale, t } from "./i18n";
+import {
+  openLocalStore,
+  type LocalStore,
+  type OutboxOp,
+} from "./store";
 
 /** Home path. A call (not a literal or const) so the compiler emits a runtime
  * setAttribute: a static `href=/` inlines into the template unquoted, which
@@ -79,6 +81,16 @@ function saveRecent(project: Project): void {
   }
 }
 
+function removeRecent(id: string): { id: string; title: string }[] {
+  try {
+    const next = loadRecents().filter((r) => r.id !== id);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return [];
+  }
+}
+
 // --- Locale toggle ----------------------------------------------------------
 function LocaleToggle() {
   return (
@@ -96,7 +108,7 @@ function LocaleToggle() {
 function Home() {
   const [title, setTitle] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const recents = loadRecents();
+  const [recents, setRecents] = createSignal(loadRecents());
 
   const create = async () => {
     if (busy()) return;
@@ -107,6 +119,21 @@ function Home() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Privacy: drop the local copy (IndexedDB rows + recent entry). The server
+  // copy stays for everyone else with the link.
+  const forget = (id: string) => {
+    setRecents(removeRecent(id));
+    void (async () => {
+      try {
+        const s = await openLocalStore();
+        await s.clearProject(id);
+        s.close();
+      } catch {
+        // Best effort; nothing user-visible depends on it.
+      }
+    })();
   };
 
   return (
@@ -127,14 +154,23 @@ function Home() {
           {t().home.newProject}
         </button>
       </div>
-      <Show when={recents.length > 0}>
+      <Show when={recents().length > 0}>
         <div class="recents">
           <div class="recents-title">{t().home.recent}</div>
-          <For each={recents}>
+          <For each={recents()}>
             {(r) => (
-              <a class="recent-link" href={`/p/${r.id}`}>
-                {r.title || t().untitled}
-              </a>
+              <div class="recent-row">
+                <a class="recent-link" href={`/p/${r.id}`}>
+                  {r.title || t().untitled}
+                </a>
+                <button
+                  class="recent-forget"
+                  title={t().home.forget}
+                  onClick={() => forget(r.id)}
+                >
+                  ×
+                </button>
+              </div>
             )}
           </For>
         </div>
@@ -182,6 +218,19 @@ function Board(props: { projectId: string }) {
   let lastRev = 0;
   let pendingRemoteTitle: string | null = null;
   let lastCardId: string | null = null;
+
+  // --- Sync engine state ----------------------------------------------------
+  /** This page load's id; outbox rows carry it for multi-tab debugging. */
+  const tabId = genTodoId();
+  /** Local deletes by todo id. Suppresses only events at or below the
+   * recorded rev (P0-1: server ids are reusable, so tombstones expire). */
+  const tombstones = new Map<string, { rev: number }>();
+  /** Consecutive 5xx before an op is dropped as poison (P0-3). */
+  const MAX_OP_ATTEMPTS = 5;
+  const [sync, setSync] = createSignal<{
+    state: "synced" | "syncing" | "offline";
+    pending: number;
+  }>({ state: "syncing", pending: 0 });
 
   const columns = createMemo(() => {
     const all = todos();
@@ -275,27 +324,6 @@ function Board(props: { projectId: string }) {
     flash(changed);
   }
 
-  function acceptTodo(todo: Todo, rev: number): void {
-    if (rev > lastRev) {
-      lastRev = rev;
-      const prev = todos();
-      const idx = prev.findIndex((t) => t.id === todo.id);
-      const next =
-        idx < 0
-          ? [...prev, todo]
-          : [...prev.slice(0, idx), todo, ...prev.slice(idx + 1)];
-      const { list, changed } = mergeTodos(prev, next);
-      applyTodos(list);
-      flash(changed);
-    }
-    setPending((p) => {
-      if (!p[todo.id]) return p;
-      const next = { ...p };
-      delete next[todo.id];
-      return next;
-    });
-  }
-
   async function refetch(): Promise<void> {
     try {
       const snap = await fetchSnapshot(pid);
@@ -306,8 +334,37 @@ function Board(props: { projectId: string }) {
       }
       lastRev = snap.rev;
       applySnapshotTodos(snap.todos);
+      // Snapshot is truth: tombstones for todos the server still has are stale.
+      const alive = new Set(snap.todos.map((td) => td.id));
+      for (const id of [...tombstones.keys()]) {
+        if (alive.has(id)) {
+          tombstones.delete(id);
+          void store?.deleteTombstone(id).catch(() => {});
+        }
+      }
     } catch {
       // Keep showing the last known state; the reconnect bar stays up.
+    }
+  }
+
+  /** Delta pull from the persisted server log. */
+  async function pullDelta(): Promise<void> {
+    if (!store) return;
+    try {
+      let since = lastRev;
+      for (;;) {
+        const res = await fetchLog(pid, since);
+        if ("reset" in res) {
+          await refetch();
+          return;
+        }
+        if (res.events.length === 0) return;
+        for (const ev of res.events) onEvent(ev);
+        if (res.events.length < 500) return;
+        since = res.events[res.events.length - 1].rev;
+      }
+    } catch {
+      // Stay on current state; the live stream heals the gap when it can.
     }
   }
 
@@ -332,8 +389,24 @@ function Board(props: { projectId: string }) {
       return;
     }
     if (event.type === "todo:deleted") {
+      tombstones.set(event.todoId, { rev: event.rev });
+      void store?.putTombstone({
+        todoId: event.todoId,
+        projectId: pid,
+        rev: event.rev,
+        deletedAt: Date.now(),
+      }).catch(() => {});
       applyTodos(todos().filter((t) => t.id !== event.todoId));
       return;
+    }
+    // Tombstone gate (P0-1): a delete suppresses only older-or-equal events,
+    // so a resurrected id (server ids are reusable) still applies. A create
+    // newer than the tombstone clears it.
+    const tomb = tombstones.get(event.todo.id);
+    if (tomb && event.rev <= tomb.rev) return;
+    if (event.type === "todo:created") {
+      tombstones.delete(event.todo.id);
+      void store?.deleteTombstone(event.todo.id).catch(() => {});
     }
     const prev = todos();
     const idx = prev.findIndex((t) => t.id === event.todo.id);
@@ -360,6 +433,156 @@ function Board(props: { projectId: string }) {
     });
   }
 
+  // --- Sync engine ------------------------------------------------------------
+  // Every mutation enqueues an op and flushes. Failures stay queued (offline
+  // is a state, not an error); rollback happens only when an op is dropped
+  // as poison or converged, followed by a pull to server truth.
+  let flushing = false;
+
+  function updateSyncStatus(): void {
+    void (async () => {
+      const queued = store
+        ? await store.listOutbox(pid).catch(() => [])
+        : [];
+      const online =
+        typeof navigator === "undefined" ? true : navigator.onLine !== false;
+      if (!online) setSync({ state: "offline", pending: queued.length });
+      else if (conn() === "reconnecting" || flushing || queued.length > 0) {
+        setSync({ state: "syncing", pending: queued.length });
+      } else setSync({ state: "synced", pending: 0 });
+    })();
+  }
+
+  function enqueueAndFlush(
+    op: Omit<OutboxOp, "seq" | "opId" | "tabId" | "attempts" | "createdAt">,
+    rollback: () => void,
+  ): void {
+    const s = store;
+    if (!s) return;
+    void (async () => {
+      try {
+        await s.enqueue({ ...op, opId: genTodoId(), tabId });
+      } catch {
+        rollback();
+        return;
+      }
+      updateSyncStatus();
+      void flushOutbox();
+    })();
+  }
+
+  async function flushOutbox(): Promise<void> {
+    const s = store;
+    if (!s || flushing) return;
+    const run = async (): Promise<void> => {
+      if (flushing) return;
+      flushing = true;
+      updateSyncStatus();
+      try {
+        for (;;) {
+          const ops = await s.listOutbox(pid).catch(() => []);
+          if (ops.length === 0) break;
+          if (typeof navigator !== "undefined" && navigator.onLine === false) {
+            break;
+          }
+          let progressed = false;
+          for (const { op, seqs } of collapseOps(ops)) {
+            try {
+              const res = await sendOp(op);
+              await s.removeOps(seqs).catch(() => {});
+              progressed = true;
+              applyAck(op, res.rev, res.todo, res.project);
+            } catch (e) {
+              if (e instanceof ApiError && (e.status === 404 || e.status === 409)) {
+                // Converged or conflicted server-side. A 409 on delete means
+                // the todo was remotely un-archived: drop only the delete and
+                // let the surviving ops resend after a pull (remote wins).
+                if (e.status === 409 && op.kind === "delete" && op.seq !== undefined) {
+                  await s.removeOps([op.seq]).catch(() => {});
+                } else {
+                  await s.removeOps(seqs).catch(() => {});
+                }
+                progressed = true;
+                void pullDelta();
+                break;
+              }
+              if (e instanceof ApiError && e.status >= 500) {
+                const attempts = op.attempts + 1;
+                if (attempts > MAX_OP_ATTEMPTS) {
+                  await s.removeOps(seqs).catch(() => {});
+                  void pullDelta();
+                } else {
+                  for (const seq of seqs) {
+                    await s.setAttempts(seq, attempts).catch(() => {});
+                  }
+                }
+              }
+              break; // network error or poison: stop, keep queued
+            }
+          }
+          updateSyncStatus();
+          if (!progressed) break;
+        }
+      } finally {
+        flushing = false;
+        updateSyncStatus();
+      }
+    };
+    try {
+      const locks = (
+        navigator as Navigator & {
+          locks?: { request: (name: string, fn: () => Promise<void>) => Promise<void> };
+        }
+      )?.locks;
+      if (locks) await locks.request("todo-sync", run);
+      else await run();
+    } catch {
+      if (!flushing) await run().catch(() => {});
+    }
+  }
+
+  /** REST ack without state authority (P0-2): remove/unmark, apply the echo
+   * only when it is exactly next, pull on a gap. */
+  function applyAck(
+    op: OutboxOp,
+    rev: number,
+    todo?: Todo,
+    project?: Project,
+  ): void {
+    if (op.todoId) {
+      if (op.kind === "delete") {
+        const prev = tombstones.get(op.todoId);
+        if (!prev || prev.rev < rev) {
+          tombstones.set(op.todoId, { rev });
+          void store
+            ?.putTombstone({ todoId: op.todoId, projectId: pid, rev, deletedAt: Date.now() })
+            .catch(() => {});
+        }
+      }
+      unmarkPending(op.todoId);
+    }
+    if (rev <= lastRev) return;
+    if (rev !== lastRev + 1) {
+      void pullDelta();
+      return;
+    }
+    lastRev = rev;
+    if (todo) {
+      const prev = todos();
+      const idx = prev.findIndex((t) => t.id === todo.id);
+      const next =
+        idx < 0
+          ? [...prev, todo]
+          : [...prev.slice(0, idx), todo, ...prev.slice(idx + 1)];
+      const { list, changed } = mergeTodos(prev, next);
+      applyTodos(list);
+      flash(changed);
+    } else if (project) {
+      setProject(project);
+      saveRecent(project);
+    }
+  }
+
   function handleCreate(title: string): void {
     const clean = title.trim();
     if (!clean) return;
@@ -374,12 +597,13 @@ function Board(props: { projectId: string }) {
     };
     applyTodos((prev) => [optimistic, ...prev]);
     markPending(id);
-    void createTodo(pid, { id, title: clean })
-      .then(({ todo, rev }) => acceptTodo(todo, rev))
-      .catch(() => {
+    enqueueAndFlush(
+      { projectId: pid, kind: "create", todoId: id, title: clean },
+      () => {
         applyTodos((prev) => prev.filter((t) => t.id !== id));
         unmarkPending(id);
-      });
+      },
+    );
   }
 
   function handleRename(id: string, title: string): void {
@@ -388,12 +612,13 @@ function Board(props: { projectId: string }) {
     if (!prev || prev.title === clean || !clean) return;
     applyTodos((list) => list.map((t) => (t.id === id ? { ...t, title: clean } : t)));
     markPending(id);
-    void renameTodo(pid, id, clean)
-      .then(({ todo, rev }) => acceptTodo(todo, rev))
-      .catch(() => {
+    enqueueAndFlush(
+      { projectId: pid, kind: "rename", todoId: id, title: clean },
+      () => {
         applyTodos((list) => list.map((t) => (t.id === id ? prev : t)));
         unmarkPending(id);
-      });
+      },
+    );
   }
 
   function handleMove(
@@ -438,12 +663,13 @@ function Board(props: { projectId: string }) {
     const newTarget = [...target.slice(0, idx), moved, ...target.slice(idx)];
     applyTodos([...rest.filter((t) => t.status !== toStatus), ...newTarget]);
     markPending(id);
-    void moveTodo(pid, id, toStatus, beforeId, afterId)
-      .then(({ todo, rev }) => acceptTodo(todo, rev))
-      .catch(() => {
+    enqueueAndFlush(
+      { projectId: pid, kind: "move", todoId: id, toStatus, beforeId, afterId },
+      () => {
         applyTodos(prevList);
         unmarkPending(id);
-      });
+      },
+    );
   }
 
   /**
@@ -466,15 +692,19 @@ function Board(props: { projectId: string }) {
     const nextId = col[i + 1]?.id ?? col[i - 1]?.id ?? null;
     applyTodos(prevList.filter((t) => t.id !== id));
     markPending(id);
-    void deleteTodo(pid, id)
-      .then(({ rev }) => {
-        if (rev > lastRev) lastRev = rev;
-        unmarkPending(id);
-      })
-      .catch(() => {
+    tombstones.set(id, { rev: lastRev });
+    void store
+      ?.putTombstone({ todoId: id, projectId: pid, rev: lastRev, deletedAt: Date.now() })
+      .catch(() => {});
+    enqueueAndFlush(
+      { projectId: pid, kind: "delete", todoId: id },
+      () => {
+        tombstones.delete(id);
+        void store?.deleteTombstone(id).catch(() => {});
         applyTodos(prevList);
         unmarkPending(id);
-      });
+      },
+    );
     if (nextId) focusCard(nextId);
     else (document.activeElement as HTMLElement | null)?.blur?.();
   }
@@ -484,13 +714,10 @@ function Board(props: { projectId: string }) {
     const prev = project();
     if (!prev || prev.title === clean || !clean) return;
     setProject({ ...prev, title: clean });
-    void renameProject(pid, clean)
-      .then(({ project: next, rev }) => {
-        if (rev > lastRev) lastRev = rev;
-        setProject(next);
-        saveRecent(next);
-      })
-      .catch(() => setProject(prev));
+    enqueueAndFlush(
+      { projectId: pid, kind: "projectRename", title: clean },
+      () => setProject(prev),
+    );
   }
 
   // --- Editing ---------------------------------------------------------------
@@ -745,23 +972,126 @@ function Board(props: { projectId: string }) {
     window.removeEventListener("focusout", onFocusTrack);
   });
 
+  // Connectivity: flush on regain, repaint status on change. Pagehide gets a
+  // best-effort flush so fewer ops die with the tab (P0-5 residual).
+  function onNetChange(): void {
+    updateSyncStatus();
+    if (typeof navigator !== "undefined" && navigator.onLine !== false) {
+      void flushOutbox();
+    }
+  }
+  window.addEventListener("online", onNetChange);
+  window.addEventListener("offline", onNetChange);
+  const onHide = (): void => {
+    void flushOutbox();
+  };
+  window.addEventListener("pagehide", onHide);
+  onCleanup(() => {
+    window.removeEventListener("online", onNetChange);
+    window.removeEventListener("offline", onNetChange);
+    window.removeEventListener("pagehide", onHide);
+  });
+
   // --- Boot (once per page load; navigations are full reloads) ---------------
-  fetchSnapshot(pid)
-    .then((snap) => {
-      setProject(snap.project);
-      applyTodos(snap.todos);
+  let store: LocalStore | null = null;
+  let disconnect: (() => void) | null = null;
+
+  function connectStream(sinceRev: number): void {
+    disconnect?.();
+    disconnect = subscribe(pid, sinceRev, {
+      onEvent,
+      onOpen: () => {
+        setConn("live");
+        updateSyncStatus();
+        void flushOutbox();
+      },
+      onError: () => {
+        setConn("reconnecting");
+        updateSyncStatus();
+      },
+    });
+  }
+  onCleanup(() => disconnect?.());
+
+  // Write-through cache: every committed state lands in the local store, so
+  // the next boot renders instantly. Same granularity as the REST calls.
+  // Every lastRev bump coincides with a todos/project change, so reading the
+  // plain variable here always sees the current value.
+  createEffect(
+    () => ({ p: project(), st: state(), list: todos(), pd: pending() }),
+    ({ p, st, list, pd }) => {
+      if (!store || st !== "ready" || !p) return;
+      void store
+        .putProject({ id: p.id, title: p.title, lastRev })
+        .catch(() => {});
+      void store
+        .replaceTodos(
+          pid,
+          list.map((td) => ({ ...td, projectId: pid, pending: !!pd[td.id] })),
+        )
+        .catch(() => {});
+    },
+  );
+
+  void (async () => {
+    store = await openLocalStore();
+    // Preload tombstones and GC ones older than 30 days (retention policy).
+    try {
+      const now = Date.now();
+      for (const tb of await store.tombstonesFor(pid)) {
+        if (now - tb.deletedAt > 30 * 24 * 3600 * 1000) {
+          await store.deleteTombstone(tb.todoId).catch(() => {});
+        } else {
+          tombstones.set(tb.todoId, { rev: tb.rev });
+        }
+      }
+    } catch {
+      // Tombstones are an optimization; the log still converges.
+    }
+    const cached = await store.getProject(pid).catch(() => undefined);
+    if (cached) {
+      setProject({ id: cached.id, title: cached.title });
+      const ct = await store.getTodos(pid).catch(() => []);
+      setTodos(ct);
+      const pd: Record<string, true> = {};
+      for (const td of ct) if (td.pending) pd[td.id] = true;
+      setPending(pd);
+      lastRev = cached.lastRev;
+      setState("ready");
+      saveRecent({ id: cached.id, title: cached.title });
+      connectStream(cached.lastRev);
+    }
+    try {
+      const snap = await fetchSnapshot(pid);
+      if (!editingProjectTitle()) {
+        setProject(snap.project);
+      } else {
+        pendingRemoteTitle = snap.project.title;
+      }
+      // Snapshot is truth: exact replace without a flash storm; pending
+      // survives only for todos the server still has.
+      setTodos(snap.todos);
+      setPending((prev) => {
+        const ids = new Set(snap.todos.map((td) => td.id));
+        const next: Record<string, true> = {};
+        for (const id of Object.keys(prev)) if (ids.has(id)) next[id] = true;
+        return next;
+      });
       lastRev = snap.rev;
       setState("ready");
       saveRecent(snap.project);
-      subscribe(pid, snap.rev, {
-        onEvent,
-        onOpen: () => setConn("live"),
-        onError: () => setConn("reconnecting"),
-      });
-    })
-    .catch((e) => {
-      setState(e instanceof ApiError && e.status === 404 ? "missing" : "failed");
-    });
+      connectStream(snap.rev);
+      updateSyncStatus();
+      // Previous session may have left queued ops; flush after the stream is
+      // up so acks and echoes converge through the same gates.
+      void flushOutbox();
+    } catch (e) {
+      // With a cache we stay on it; without one show the error state.
+      if (state() !== "ready") {
+        setState(e instanceof ApiError && e.status === 404 ? "missing" : "failed");
+      }
+    }
+  })();
 
   return (
     <div class="board">
@@ -847,6 +1177,10 @@ function Board(props: { projectId: string }) {
                 </button>
               </Show>
               <div class="topbar-actions">
+                <span class="sync-state">
+                  {t().sync[sync().state]}
+                  {sync().pending > 0 ? ` · ${sync().pending}` : ""}
+                </span>
                 <button
                   class="btn small"
                 onClick={() => {

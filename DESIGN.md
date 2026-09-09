@@ -106,6 +106,9 @@ The paths below omit the prefix for brevity.
 - `POST /projects { title }` -> `{ id, title }`. Client redirects to `/p/:id`.
 - `GET /projects/:id` -> `{ project: { id, title }, todos: [...], rev }`.
   - Assumes fewer than ~500 todos per project. Single full snapshot, no pagination. Deliberate simplification; add pagination only when the limit is exceeded.
+- `GET /projects/:id/log?since=<rev>` -> `{ events, rev }` or `{ reset: true, rev }`.
+  Delta pull from the persisted event log (max 500 per call, oldest first).
+  `reset` means `since` predates retention: refetch the snapshot instead.
 - `PATCH /projects/:id { title }` — rename project.
 
 ### Todo Mutations: Operation-Split LWW
@@ -233,6 +236,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 | Todo rename | `PATCH .../todos/:id` | `title` only | `todo:renamed` |
 | Todo move / reorder | `POST .../todos/:id/move` | `status + rank` atomically | `todo:moved` |
 | Todo delete (archive only) | `DELETE .../todos/:id` | row removed | `todo:deleted` |
+| Delta pull | `GET .../log?since=` | none (reads event log) | none |
 
 The client knows no ordering algorithm, no merge, and no clock. It points at neighbors; the server stamps order and broadcasts. This keeps both code and UX light.
 
@@ -240,3 +244,32 @@ The client knows no ordering algorithm, no merge, and no clock. It points at nei
 
 1. May todos in `archive` move back to `todo / doing`? Current design allows it; forbid in move validation if not wanted.
 2. Accept title limits of 200 chars (todo) and 100 chars (project)?
+
+## 12. Local-First (IndexedDB)
+
+Linear-inspired: the browser holds a real local database, writes apply instantly,
+and the server stays the authority for order (per-project `rev` ≈ Linear's sync id,
+LWW by receive order, no CRDT).
+
+- **Stores** (`todo-kanban`, v1): `projects` (id, title, lastRev), `todos`
+  (+`pending` flag), `outbox` (FIFO per project, opId/tabId/attempts), `tombstones`
+  (`todoId → rev`). IDB unavailable → in-memory fallback, same contract.
+- **Boot**: render the cached snapshot instantly, then fetch truth, subscribe,
+  flush leftovers. First visit seeds from the snapshot.
+- **Writes**: optimistic apply + outbox enqueue + flush. Failures stay queued
+  (offline is a state); rollback only on poison/converge, then pull. Op
+  collapsing at flush (rename folds, move replaces, delete supersedes).
+- **Acks (P0-2)**: REST success only dequeues. State converges through the
+  rev-gated stream; the exact-next echo applies at once, an ahead echo pulls
+  the gap. `lastRev` never jumps past unapplied events.
+- **Deletes (P0-1)**: tombstones suppress only events at or below their rev,
+  so reusable ids still resurrect; newer `create` clears the tombstone.
+- **Sync**: SSE live, `log` delta pull on gaps, snapshot on reset. Multi-tab
+  via idempotent ops + `navigator.locks` flush leadership. `pagehide` gets a
+  best-effort flush; unflushed offline edits can still be lost to eviction
+  (accepted residual risk, mitigated by `persist()`).
+- **Retention**: 1000 events/project, tombstone GC after 30 days. Update policy:
+  default SW lifecycle, no forced reload (draft safety).
+- **Privacy**: anonymous links leave a device copy. Home recents offer per-project
+  Forget (local rows only); the server copy stays for other link holders.
+- **Migrations**: version bump wipes and reseeds from the server.

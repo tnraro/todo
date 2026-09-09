@@ -1,7 +1,16 @@
 // Server-local SQLite store. Single writer, synchronous transactions:
 // the per-project atomic rev increment defines LWW order.
 import { Database } from "bun:sqlite";
-import type { Snapshot, Status, Todo } from "@todo/shared";
+import type { Project, ServerEvent, Snapshot, Status, Todo } from "@todo/shared";
+
+/** Retained events per project. Older rows are dropped; clients that fall
+ * behind get a reset + snapshot instead (same as Linear's firstSyncId). */
+let LOG_CAP = 1000;
+
+/** Test-only hook to shrink retention. Restored by the caller. */
+export function setLogCap(n: number): void {
+  LOG_CAP = n;
+}
 
 export interface Db {
   createProject(id: string, title: string): void;
@@ -34,6 +43,12 @@ export interface Db {
     todoId: string,
   ): { outcome: "deleted"; rev: number } | { outcome: "active" } | null;
   todoExists(todoId: string): { projectId: string } | null;
+  /**
+   * Events with rev > since, oldest first (max 500 per call; the client
+   * loops). Null when `since` predates retention: the client must reset to
+   * a snapshot instead.
+   */
+  getLog(projectId: string, since: number): ServerEvent[] | null;
 }
 
 interface ProjectRow {
@@ -81,6 +96,13 @@ export function openDb(path: string): Db {
     );
     CREATE INDEX IF NOT EXISTS idx_todos_lookup
       ON todos(project_id, status, rank, id);
+    CREATE TABLE IF NOT EXISTS project_events (
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      rev INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      PRIMARY KEY (project_id, rev)
+    );
   `);
 
   const insertProject = db.prepare(
@@ -122,8 +144,52 @@ export function openDb(path: string): Db {
   const deleteTodoRow = db.prepare(
     "DELETE FROM todos WHERE project_id = ? AND id = ?",
   );
+  const insertEvent = db.prepare(
+    "INSERT INTO project_events (project_id, rev, type, payload) VALUES (?, ?, ?, ?)",
+  );
+  const selectCutoff = db.prepare(
+    "SELECT rev FROM project_events WHERE project_id = ? ORDER BY rev DESC LIMIT 1 OFFSET ?",
+  );
+  const deleteBelow = db.prepare(
+    "DELETE FROM project_events WHERE project_id = ? AND rev < ?",
+  );
+  const selectLog = db.prepare(
+    "SELECT rev, type, payload FROM project_events WHERE project_id = ? AND rev > ? ORDER BY rev ASC LIMIT 500",
+  );
+  const selectOldestRev = db.prepare(
+    "SELECT MIN(rev) AS min_rev FROM project_events WHERE project_id = ?",
+  );
 
   const now = () => Date.now();
+
+  /** Append one event at the already-bumped rev; trim beyond retention. */
+  function logEvent(
+    projectId: string,
+    rev: number,
+    type: ServerEvent["type"],
+    payload: Record<string, unknown>,
+  ): void {
+    insertEvent.run(projectId, rev, type, JSON.stringify(payload));
+    const cutoff = selectCutoff.get(projectId, LOG_CAP - 1) as
+      | { rev: number }
+      | null;
+    if (cutoff) deleteBelow.run(projectId, cutoff.rev);
+  }
+
+  function toEvent(row: { rev: number; type: string; payload: string }): ServerEvent {
+    const payload = JSON.parse(row.payload) as {
+      project?: Project;
+      todo?: Todo;
+      todoId?: string;
+    };
+    if (row.type === "project:renamed" && payload.project) {
+      return { type: "project:renamed", rev: row.rev, project: payload.project };
+    }
+    if (row.type === "todo:deleted" && payload.todoId) {
+      return { type: "todo:deleted", rev: row.rev, todoId: payload.todoId };
+    }
+    return { type: row.type, rev: row.rev, todo: payload.todo } as ServerEvent;
+  }
 
   return {
     createProject(id, title) {
@@ -137,7 +203,11 @@ export function openDb(path: string): Db {
     renameProject(id, title) {
       return db.transaction(() => {
         const row = updateProjectTitle.get(title, id) as { rev: number } | null;
-        return row ? row.rev : null;
+        if (!row) return null;
+        logEvent(id, row.rev, "project:renamed", {
+          project: { id, title },
+        });
+        return row.rev;
       })();
     },
 
@@ -188,6 +258,7 @@ export function openDb(path: string): Db {
           todo.updatedAt,
         );
         const row = bumpRev.get(todo.projectId) as { rev: number };
+        logEvent(todo.projectId, row.rev, "todo:created", { todo });
         return row.rev;
       })();
     },
@@ -197,6 +268,10 @@ export function openDb(path: string): Db {
         const changed = updateTodoTitle.run(title, now(), projectId, todoId);
         if (changed.changes === 0) return null;
         const row = bumpRev.get(projectId) as { rev: number };
+        const todo = toTodo(
+          selectTodo.get(projectId, todoId) as TodoRow,
+        );
+        logEvent(projectId, row.rev, "todo:renamed", { todo });
         return row.rev;
       })();
     },
@@ -212,6 +287,10 @@ export function openDb(path: string): Db {
         );
         if (changed.changes === 0) return null;
         const row = bumpRev.get(projectId) as { rev: number };
+        const todo = toTodo(
+          selectTodo.get(projectId, todoId) as TodoRow,
+        );
+        logEvent(projectId, row.rev, "todo:moved", { todo });
         return row.rev;
       })();
     },
@@ -224,6 +303,7 @@ export function openDb(path: string): Db {
         if (existing.status !== "archive") return { outcome: "active" } as const;
         deleteTodoRow.run(projectId, todoId);
         const rev = bumpRev.get(projectId) as { rev: number };
+        logEvent(projectId, rev.rev, "todo:deleted", { todoId });
         return { outcome: "deleted", rev: rev.rev } as const;
       })();
     },
@@ -233,6 +313,27 @@ export function openDb(path: string): Db {
         project_id: string;
       } | null) ?? null;
       return row ? { projectId: row.project_id } : null;
+    },
+
+    getLog(projectId, since) {
+      const project = (selectProject.get(projectId) as ProjectRow | null) ?? null;
+      if (!project) return null;
+      const oldest = (selectOldestRev.get(projectId) as {
+        min_rev: number | null;
+      } | null)?.min_rev;
+      // Complete only when every rev above `since` is retained.
+      if (oldest !== null && oldest !== undefined && oldest > since + 1) {
+        return null;
+      }
+      if ((oldest === null || oldest === undefined) && since < project.rev) {
+        return null;
+      }
+      const rows = selectLog.all(projectId, since) as {
+        rev: number;
+        type: string;
+        payload: string;
+      }[];
+      return rows.map(toEvent);
     },
   };
 }

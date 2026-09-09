@@ -104,6 +104,17 @@ export function deleteTodo(
   );
 }
 
+export type LogResult =
+  | { events: ServerEvent[]; rev: number }
+  | { reset: true; rev: number };
+
+/** Delta pull: events after `since`. `reset` means retention lapsed. */
+export function fetchLog(projectId: string, since: number): Promise<LogResult> {
+  return call(
+    `/api/projects/${encodeURIComponent(projectId)}/log?since=${since}`,
+  );
+}
+
 const ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /** Client-generated todo id: 12 url-safe chars, also used for idempotent retry. */

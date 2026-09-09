@@ -11,6 +11,7 @@ import {
   normalizeNeighborId,
   normalizeTitle,
   normalizeTodoId,
+  type ServerEvent,
   type Status,
   type Todo,
 } from "@todo/shared";
@@ -70,6 +71,32 @@ function rateLimited(req: Request): boolean {
 interface Neighbors {
   beforeId: string | null;
   afterId: string | null;
+}
+
+/**
+ * Missed events for an SSE open, read from the persisted log. Null (truncated)
+ * becomes a single reset so the client refetches. The query runs
+ * synchronously before subscribe, so no event slips between replay and live.
+ */
+function missedEvents(
+  db: Db,
+  projectId: string,
+  url: URL,
+  req: Request,
+  currentRev: number,
+): ServerEvent[] {
+  const headerId = req.headers.get("last-event-id");
+  const queryRev = url.searchParams.get("sinceRev");
+  // The header is the live cursor (auto-resent on reconnect) and wins
+  // over the stale initial cursor in the query string.
+  const raw = headerId ?? queryRev;
+  const since = raw === null ? currentRev : Number(raw);
+  const sinceRev =
+    Number.isInteger(since) && since >= 0 ? since : currentRev;
+  if (sinceRev >= currentRev) return [];
+  return (
+    db.getLog(projectId, sinceRev) ?? [{ type: "reset", rev: currentRev }]
+  );
 }
 
 function parseNeighbors(body: Record<string, unknown>): Neighbors {
@@ -178,14 +205,21 @@ export function createApp(db: Db, options: AppOptions = {}) {
         if (rest === "/events" && req.method === "GET") {
           const project = db.getProject(projectId);
           if (!project) return notFound("project not found");
-          const headerId = req.headers.get("last-event-id");
-          const queryRev = url.searchParams.get("sinceRev");
-          // The header is the live cursor (auto-resent on reconnect) and wins
-          // over the stale initial cursor in the query string.
-          const raw = headerId ?? queryRev;
-          const since = raw === null ? project.rev : Number(raw);
-          const sinceRev = Number.isInteger(since) && since >= 0 ? since : project.rev;
-          return hub.stream(projectId, sinceRev, project.rev);
+          const initial = missedEvents(db, projectId, url, req, project.rev);
+          return hub.stream(projectId, initial);
+        }
+
+        if (rest === "/log" && req.method === "GET") {
+          const project = db.getProject(projectId);
+          if (!project) return notFound("project not found");
+          const raw = url.searchParams.get("since");
+          const since = raw === null ? 0 : Number(raw);
+          if (!Number.isInteger(since) || since < 0) {
+            return badRequest("invalid since");
+          }
+          const events = db.getLog(projectId, since);
+          if (events === null) return json({ reset: true, rev: project.rev });
+          return json({ events, rev: project.rev });
         }
 
         if (rest === "/todos" && req.method === "POST") {

@@ -22,6 +22,7 @@ const en = {
     titlePlaceholder: "New project title…",
     newProject: "New project",
     recent: "Recent",
+    forget: "Forget this project locally",
   },
   board: {
     reconnecting: "Reconnecting…",
@@ -38,6 +39,11 @@ const en = {
   column: {
     add: "+ Add",
     newTodoPlaceholder: "New todo, Enter to add…",
+  },
+  sync: {
+    synced: "Synced",
+    syncing: "Syncing…",
+    offline: "Offline",
   },
   hud: {
     new: "new",
@@ -71,6 +77,7 @@ const ko: Dict = {
     titlePlaceholder: "새 프로젝트 이름…",
     newProject: "새 프로젝트",
     recent: "최근",
+    forget: "이 기기에서 이 프로젝트 지우기",
   },
   board: {
     reconnecting: "다시 연결 중…",
@@ -87,6 +94,11 @@ const ko: Dict = {
   column: {
     add: "+ 추가",
     newTodoPlaceholder: "새 할 일, Enter로 추가…",
+  },
+  sync: {
+    synced: "동기화됨",
+    syncing: "동기화 중…",
+    offline: "오프라인",
   },
   hud: {
     new: "새로 만들기",

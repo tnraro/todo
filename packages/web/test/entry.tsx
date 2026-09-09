@@ -40,7 +40,10 @@ interface FakeSnapshot {
 // echoing what the real server returns. Rank resolution mirrors the server
 // (explicit neighbors win, both-open means top) using the shared keyBetween,
 // so echos preserve the requested order. */
-function installBackend(snapshot: FakeSnapshot): void {
+function installBackend(
+  snapshot: FakeSnapshot,
+  options: { hangSnapshot?: boolean } = {},
+): void {
   const store = new Map(snapshot.todos.map((t) => [t.id, { ...t }]));
   let project = { ...snapshot.project };
   let rev = snapshot.rev;
@@ -82,10 +85,18 @@ function installBackend(snapshot: FakeSnapshot): void {
   ) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    // Test hook: simulate offline mutations (GETs keep working).
+    if (
+      (globalThis as Record<string, unknown>).__backendOffline &&
+      method !== "GET"
+    ) {
+      throw new TypeError("offline");
+    }
     const body = init?.body ? JSON.parse(init.body) : {};
     const todosRe = /\/api\/projects\/([^/]+)\/todos(?:\/([^/]+)(\/move)?)?$/;
 
     if (method === "GET" && /\/api\/projects\/[^/]+$/.test(url)) {
+      if (options.hangSnapshot) await new Promise(() => {});
       const snap: FakeSnapshot = {
         project: { ...project },
         todos: [...store.values()].map((t) => ({ ...t })),
@@ -138,9 +149,12 @@ function installBackend(snapshot: FakeSnapshot): void {
 
 let disposeRoot: (() => void) | undefined;
 
-export async function mountApp(snapshot: FakeSnapshot): Promise<void> {
+export async function mountApp(
+  snapshot: FakeSnapshot,
+  options: { hangSnapshot?: boolean } = {},
+): Promise<void> {
   (globalThis as Record<string, unknown>).EventSource = FakeEventSource;
-  installBackend(snapshot);
+  installBackend(snapshot, options);
   // Unmount the previous root first: two live roots share one document and
   // both would answer the same bubbled events (the detached one crashes).
   disposeRoot?.();

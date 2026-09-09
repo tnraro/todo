@@ -1,7 +1,7 @@
 // HTTP integration tests: REST contract, ordering, LWW revs, SSE stream.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/index";
-import { openDb } from "../src/db";
+import { openDb, setLogCap } from "../src/db";
 import { EventHub } from "../src/events";
 import type { Snapshot, Todo } from "@todo/shared";
 
@@ -236,7 +236,7 @@ describe("sse", () => {
 
     // Do NOT await the stream before mutating: the fetch settles only once
     // the first bytes arrive, which is the mutation below. Either interleaving
-    // converges: live delivery if subscribed in time, ring replay otherwise.
+    // converges: live delivery if subscribed in time, log replay otherwise.
     const liveP = fetch(`${base}/api/projects/${pid}/events?sinceRev=${rev0}`);
     await sleep(150);
     const renamed = await req("PATCH", `/api/projects/${pid}`, {
@@ -276,30 +276,81 @@ describe("sse", () => {
   });
 
   test("resets on unrecoverable gap", async () => {
-    const db = openDb(":memory:");
-    const app = createApp(db, { hub: new EventHub(), distDir: null });
-    const server = Bun.serve({ port: 0, fetch: app.fetch });
-    const local = `http://localhost:${server.port}`;
+    setLogCap(5);
     try {
-      const created = await fetch(local + "/api/projects", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "G" }),
-      }).then((r) => r.json());
-      // One mutation fills the ring; overflow it with 101 more.
-      for (let n = 0; n < 101; n++) {
-        await fetch(local + `/api/projects/${created.id}`, {
-          method: "PATCH",
+      const db = openDb(":memory:");
+      const app = createApp(db, { hub: new EventHub(), distDir: null });
+      const server = Bun.serve({ port: 0, fetch: app.fetch });
+      const local = `http://localhost:${server.port}`;
+      try {
+        const created = await fetch(local + "/api/projects", {
+          method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: `G${n}` }),
-        });
+          body: JSON.stringify({ title: "G" }),
+        }).then((r) => r.json());
+        // Retention keeps 5; overflow it with 7 mutations.
+        for (let n = 0; n < 7; n++) {
+          await fetch(local + `/api/projects/${created.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: `G${n}` }),
+          });
+        }
+        const res = await fetch(
+          local + `/api/projects/${created.id}/events?sinceRev=0`,
+        );
+        expect(await firstFrame(res)).toContain('"type":"reset"');
+        // Fresh revs still replay from the retained tail.
+        const tail = await fetch(
+          local + `/api/projects/${created.id}/events?sinceRev=6`,
+        );
+        expect(await firstFrame(tail)).toContain('"type":"project:renamed"');
+      } finally {
+        server.stop(true);
       }
-      const res = await fetch(
-        local + `/api/projects/${created.id}/events?sinceRev=0`,
-      );
-      expect(await firstFrame(res)).toContain('"type":"reset"');
     } finally {
-      server.stop(true);
+      setLogCap(1000);
     }
+  });
+});
+
+describe("log", () => {
+  test("delta pull, reset on truncation, validation", async () => {
+    const { data } = await req("POST", "/api/projects", { title: "L" });
+    const pid = data.id as string;
+    await req("POST", `/api/projects/${pid}/todos`, { id: "l1", title: "l1" });
+    await req("PATCH", `/api/projects/${pid}/todos/l1`, { title: "l1!" });
+
+    const full = await req("GET", `/api/projects/${pid}/log?since=0`);
+    expect(full.status).toBe(200);
+    expect(full.data.events.map((e: { type: string }) => e.type)).toEqual([
+      "todo:created",
+      "todo:renamed",
+    ]);
+    expect(full.data.events.map((e: { rev: number }) => e.rev)).toEqual([1, 2]);
+    expect(full.data.rev).toBe(2);
+
+    const tail = await req("GET", `/api/projects/${pid}/log?since=1`);
+    expect(tail.data.events.map((e: { type: string }) => e.type)).toEqual([
+      "todo:renamed",
+    ]);
+
+    const empty = await req("GET", `/api/projects/${pid}/log?since=2`);
+    expect(empty.data.events).toEqual([]);
+
+    setLogCap(2);
+    try {
+      await req("PATCH", `/api/projects/${pid}`, { title: "L2" });
+      await req("PATCH", `/api/projects/${pid}`, { title: "L3" });
+      const stale = await req("GET", `/api/projects/${pid}/log?since=0`);
+      expect(stale.data.reset).toBe(true);
+      expect(stale.data.rev).toBe(4);
+    } finally {
+      setLogCap(1000);
+    }
+
+    expect((await req("GET", `/api/projects/${pid}/log?since=nope`)).status).toBe(400);
+    expect((await req("GET", `/api/projects/${pid}/log?since=-1`)).status).toBe(400);
+    expect((await req("GET", "/api/projects/nope/log?since=0")).status).toBe(404);
   });
 });
