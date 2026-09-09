@@ -265,7 +265,8 @@ body {
   right: 12px;
   bottom: 12px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 2px;
   background: rgba(22, 25, 31, 0.92);
   border: 1px solid var(--border);
   border-radius: var(--radius);
