@@ -181,6 +181,11 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - Card content is a one-line truncated title. No wrapping. Long titles show on hover tooltip and expand inline on click-to-edit.
 - `archive` is muted visually (gray text, low contrast) but functionally identical. Always visible as the fourth column. No collapse.
 - Mobile: horizontal scroll with fixed 280px column width. No stacked reflow.
+  Touch: native DnD never fires for touch, so a 500ms long-press on a card
+  opens a bottom action sheet (edit, move left/right/up/down, archive/delete)
+  wired to the same ops as the keyboard; the release click is swallowed.
+  Shortcut HUD hides on hover-less devices; text inputs go 16px on coarse
+  pointers (iOS auto-zoom guard).
 
 ### Interaction (Keyboard-First, Linear-like)
 

@@ -57,6 +57,15 @@ const en = {
     save: "save",
     cancel: "cancel",
   },
+  menu: {
+    edit: "Edit",
+    left: "Move left",
+    right: "Move right",
+    up: "Move up",
+    down: "Move down",
+    archive: "Archive",
+    delete: "Delete",
+  },
 };
 
 export type Dict = typeof en;
@@ -111,6 +120,15 @@ const ko: Dict = {
     delete: "삭제",
     save: "저장",
     cancel: "취소",
+  },
+  menu: {
+    edit: "편집",
+    left: "왼쪽으로",
+    right: "오른쪽으로",
+    up: "위로",
+    down: "아래로",
+    archive: "보관",
+    delete: "삭제",
   },
 };
 
