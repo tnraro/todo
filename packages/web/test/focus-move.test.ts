@@ -17,9 +17,9 @@ const board = {
   rev: 7,
 };
 
-function key(target: HTMLElement, key: string, ctrl = false): void {
+function key(target: HTMLElement, keyName: string, ctrl = false): void {
   target.dispatchEvent(
-    new window.KeyboardEvent("keydown", { key, bubbles: true, ctrlKey: ctrl }),
+    new window.KeyboardEvent("keydown", { key: keyName, bubbles: true, ctrlKey: ctrl }),
   );
 }
 
@@ -33,6 +33,14 @@ describe("keyboard arrows", () => {
 
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
+
+    // No focus yet: arrows enter the board at the first card. Dispatch on
+    // the board itself: Solid delegates at the render root, so events outside
+    // it never reach the handler.
+    const boardEl = (): HTMLElement =>
+      document.querySelector(".board") as HTMLElement;
+    key(boardEl(), "ArrowDown");
+    expect((await waitFor(1000, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
 
     // Down/Up navigate within the column without moving anything.
     card("t1").focus();
@@ -65,6 +73,12 @@ describe("keyboard arrows", () => {
     key(card("t1"), "ArrowLeft", true);
     expect((await waitFor(1500, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
     expect(columnIds(0)).toEqual(["t2", "t1"]);
+
+    // Escape blurs; arrows return to the last card.
+    key(card("t1"), "Escape");
+    expect(document.activeElement).toBe(document.body);
+    key(document.querySelector(".board") as HTMLElement, "ArrowDown");
+    expect((await waitFor(1000, () => focusedCardIn("t1", 0)))?.dataset.todoId).toBe("t1");
   });
 });
 

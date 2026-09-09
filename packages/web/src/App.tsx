@@ -158,6 +158,7 @@ function Board(props: { projectId: string }) {
 
   let lastRev = 0;
   let pendingRemoteTitle: string | null = null;
+  let lastCardId: string | null = null;
 
   const columns = createMemo(() => {
     const all = todos();
@@ -241,10 +242,7 @@ function Board(props: { projectId: string }) {
       // holding focus keeps it — never steal from inputs.
       const cur = document.activeElement as HTMLElement | null;
       if (cur && cur !== document.body && document.contains(cur)) return;
-      const el = document.querySelector(
-        `[data-todo-id="${CSS.escape(focusedId)}"]`,
-      );
-      (el as HTMLElement | null)?.focus?.();
+      focusCard(focusedId);
     });
   }
 
@@ -533,8 +531,31 @@ function Board(props: { projectId: string }) {
   }
 
   function focusCard(id: string): void {
+    lastCardId = id;
     const el = document.querySelector(`[data-todo-id="${CSS.escape(id)}"]`);
     (el as HTMLElement | null)?.focus?.();
+  }
+
+  /** Focus where the user left off, or the first card when unknown. */
+  function focusLastOrFirst(): void {
+    if (lastCardId && todos().some((t) => t.id === lastCardId)) {
+      focusCard(lastCardId);
+      return;
+    }
+    for (const s of STATUSES) {
+      const first = columns()[s][0];
+      if (first) {
+        focusCard(first.id);
+        return;
+      }
+    }
+  }
+
+  /** Track keyboard/mouse focus so bare arrows can return to it. */
+  function noteFocus(e: FocusEvent): void {
+    const el = e.target as HTMLElement | null;
+    const id = el?.dataset?.todoId;
+    if (id) lastCardId = id;
   }
 
   /**
@@ -578,7 +599,15 @@ function Board(props: { projectId: string }) {
       setAdding(true);
       return;
     }
-    if (!cardEl?.dataset.todoId) return;
+    if (!cardEl?.dataset.todoId) {
+      // No card focused (and not in an input): arrows enter the board at the
+      // last card, or the first one when unknown. Anything else is ignored.
+      if (e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        focusLastOrFirst();
+      }
+      return;
+    }
     const id = cardEl.dataset.todoId;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -618,7 +647,7 @@ function Board(props: { projectId: string }) {
     });
 
   return (
-    <div class="board" onKeyDown={onBoardKeyDown}>
+    <div class="board" onKeyDown={onBoardKeyDown} onFocusIn={noteFocus}>
       <Show when={conn() === "reconnecting" && state() === "ready"}>
         <div class="reconnect">Reconnecting…</div>
       </Show>

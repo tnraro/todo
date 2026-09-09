@@ -167,7 +167,8 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
   cards (`Up/Down` within the column, `Left/Right` to the same position in the
   adjacent column, clamped at the edges). With `Ctrl` held, the arrows move the
   todo instead (`Left/Right` across columns, `Up/Down` reorder within the
-  column). Focus follows the moved card.
+  column). Focus follows the moved card. With nothing focused, arrows enter the
+  board at the last focused card, or the first card when unknown.
 - Project title: click-to-edit inline. While focused, incoming remote renames wait until blur, then apply with a flash instead of clobbering typing.
 - Copy link: copies URL, shows "Copied" toast for 1s. No other toasts.
 - Empty column: no "No items" placeholder. Empty space is the drop zone; only the `+ Add` row exists.
