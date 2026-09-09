@@ -117,6 +117,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".map": "application/json",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
   ".woff2": "font/woff2",
 };
 
@@ -281,6 +282,13 @@ export function createApp(db: Db, options: AppOptions = {}) {
         if (path.startsWith("/assets/") && !path.includes("..")) {
           const asset = await serveStatic(path);
           if (asset) return asset;
+        }
+        // PWA root files (sw.js, manifest.webmanifest, icons). Single segment
+        // only: no traversal, and the extension allowlist in serveStatic
+        // decides what is servable.
+        if (/^\/[^/]+$/.test(path) && !path.includes("..")) {
+          const root = await serveStatic(path);
+          if (root) return root;
         }
       }
 

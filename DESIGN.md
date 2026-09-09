@@ -17,13 +17,31 @@ Non-goals (YAGNI, will not build):
 
 ## 2. Tech Stack
 
-- Frontend: SolidJS 2.0. Fine-grained reactivity updates single cards and columns without a store library; small bundle fits the lightweight goal. No UI component library and no DnD library (native DnD, see section 7).
+- Frontend: SolidJS 2.0. Fine-grained reactivity updates single cards and columns without a store library; small bundle fits the lightweight goal. No UI component library and no DnD library (native DnD, see section 8).
 - Backend: Bun. One process serves the built frontend, REST, and SSE. No WebSocket infra and no external services.
 - Package manager: Bun workspaces in a single repo.
 - Layout (three packages max, YAGNI): `packages/web` (SolidJS app), `packages/server` (Bun API, SSE, store), `packages/shared` (request/response types and validation used by both sides, single source of truth).
 - Persistence is a server-local store with no external DB service. Exact engine is an implementation detail; the contract is a portable single-artifact deploy with one writer order so the per-project atomic `rev` increment defines LWW order.
 
-## 3. Domain Model
+## 3. Offline / PWA (local-first step 1)
+
+`vite-plugin-pwa` with the `injectManifest` strategy builds `src/sw.ts`.
+App shell only: precache the build output, serve `index.html` for app
+navigations (`/`, `/p/:id`), keep `/api/*` network-only (especially the SSE
+stream, which the SW never intercepts).
+
+- Registration is manual (`index.tsx`, prod only) with the default SW
+  lifecycle: updates activate on the next navigation, never force-reloading
+  away in-memory drafts. No update prompt UI yet.
+- Manifest ships from the plugin config (standalone, theme `#0f1115`); icons
+  are SVG-only for now, so PNG-based install criteria are deferred.
+- The Bun server serves the PWA root files (`sw.js`, `manifest.webmanifest`,
+  icons) as static single-segment paths.
+- Still no offline queue and no cached API data: offline, the shell boots and
+  shows the reconnect state. Local persistence and sync are later steps that
+  extend the same `sw.ts`.
+
+## 4. Domain Model
 
 ### Project
 
@@ -50,7 +68,7 @@ Sort rule (only one): `ORDER BY status, rank ASC, id ASC`. `id` is a determinist
 
 State transitions: free. Any status may move to any other status by drag. No workflow constraints.
 
-## 4. Ordering and LWW
+## 5. Ordering and LWW
 
 Storing order as a `todo[]` array on the project conflicts with LWW: one full-array overwrite loses concurrent edits.
 
@@ -78,7 +96,7 @@ Benefits:
 
 Create position: top of the `todo` column. A create without explicit neighbors defaults to the top.
 
-## 5. API Contract
+## 6. API Contract
 
 All routes are served under the `/api` prefix (e.g. `POST /api/projects`).
 The paths below omit the prefix for brevity.
@@ -110,7 +128,7 @@ Every mutation response includes `{ todo, rev }`. `rev` is the project-global se
 - `beforeId / afterId`: must belong to the same project and, after the move, to `toStatus`. On mismatch the server heals by generating a rank from the snapshot instead of erroring, to avoid UX dead-ends.
 - Unknown project ID: 404 with an empty state ("This link is invalid" + "Create new project"). Never render an empty kanban for it.
 
-## 6. Real-Time: REST + SSE
+## 7. Real-Time: REST + SSE
 
 Split direction: writes over REST, reads over SSE. Simpler than bidirectional WebSocket, and robust on plain HTTP infra with reconnect.
 
@@ -134,7 +152,7 @@ Optimistic UI with server truth:
 
 Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with lightness and anonymity.
 
-## 7. UX Design: Density and Single Kanban
+## 8. UX Design: Density and Single Kanban
 
 ### Routes / IA
 
@@ -197,7 +215,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - Editing a card that someone else changes: keep local input; on save, local value wins by LWW. No warning modal.
 - Viewing a card that changes remotely: replace in place with a flash. No scroll jump; reorders never auto-scroll.
 
-## 8. Edge Cases
+## 9. Edge Cases
 
 - Invalid/deleted ID: dedicated 404 state, not an empty kanban.
 - Overlong titles: clients truncate (todo 200, project 100); server enforces with 400. Silent truncation, no toast.
@@ -205,7 +223,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 - XSS: titles render as text only. No markdown, links, or HTML. Pasted URLs are not linkified. Deliberate simplification.
 - Abuse: unguessable IDs plus write rate limits (for example 10 rps per IP, 30 rps per project) plus title length caps. Vandalism by link holders is accepted per spec. No locks or roles.
 
-## 9. Operation Summary
+## 10. Operation Summary
 
 | Operation | Request | Server write | Broadcast |
 | --------- | ------- | ------------ | --------- |
@@ -218,7 +236,7 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 
 The client knows no ordering algorithm, no merge, and no clock. It points at neighbors; the server stamps order and broadcasts. This keeps both code and UX light.
 
-## 10. Open Questions
+## 11. Open Questions
 
 1. May todos in `archive` move back to `todo / doing`? Current design allows it; forbid in move validation if not wanted.
 2. Accept title limits of 200 chars (todo) and 100 chars (project)?

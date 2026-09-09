@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@solidjs/web",
     "types": ["vite/client"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true
