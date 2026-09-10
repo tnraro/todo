@@ -179,6 +179,7 @@ function Home() {
                 <button
                   class="recent-forget"
                   title={t().home.forget}
+                  aria-label={t().home.forget}
                   onClick={() => forget(r.id)}
                 >
                   ×
@@ -1232,7 +1233,12 @@ function Board(props: { projectId: string }) {
         {(p) => (
           <>
             <header class="topbar">
-              <a class="home-link" href={homeHref()} title={t().board.backHome}>
+              <a
+                class="home-link"
+                href={homeHref()}
+                title={t().board.backHome}
+                aria-label={t().board.backHome}
+              >
                 ‹
               </a>
               <Show
@@ -1276,7 +1282,7 @@ function Board(props: { projectId: string }) {
                 </button>
               </Show>
               <div class="topbar-actions">
-                <span class="sync-state">
+                <span class="sync-state" role="status">
                   {t().sync[sync().state]}
                   {sync().pending > 0 ? ` · ${sync().pending}` : ""}
                 </span>
@@ -1385,23 +1391,24 @@ function Board(props: { projectId: string }) {
                   <>
                     <div class="sheet-scrim" onClick={closeMenu} />
                     <div class="sheet" role="menu" style={pos}>
-                      <button class="sheet-item" onClick={act((id) => startEdit(id))}>
+                      <button class="sheet-item" role="menuitem" onClick={act((id) => startEdit(id))}>
                         {t().menu.edit}
                       </button>
-                      <button class="sheet-item" onClick={act((id) => moveStatus(id, -1))}>
+                      <button class="sheet-item" role="menuitem" onClick={act((id) => moveStatus(id, -1))}>
                         ← {t().menu.left}
                       </button>
-                      <button class="sheet-item" onClick={act((id) => moveStatus(id, 1))}>
+                      <button class="sheet-item" role="menuitem" onClick={act((id) => moveStatus(id, 1))}>
                         → {t().menu.right}
                       </button>
-                      <button class="sheet-item" onClick={act((id) => reorder(id, -1))}>
+                      <button class="sheet-item" role="menuitem" onClick={act((id) => reorder(id, -1))}>
                         ↑ {t().menu.up}
                       </button>
-                      <button class="sheet-item" onClick={act((id) => reorder(id, 1))}>
+                      <button class="sheet-item" role="menuitem" onClick={act((id) => reorder(id, 1))}>
                         ↓ {t().menu.down}
                       </button>
                       <button
                         class="sheet-item danger"
+                        role="menuitem"
                         onClick={act((id) => handleDelete(id))}
                       >
                         {archived() ? t().menu.delete : t().menu.archive}
@@ -1549,6 +1556,7 @@ function Column(props: ColumnProps) {
                       props.draggingId === todo.id ? "dragging" : "",
                     ]}
                     tabindex="0"
+                    role="button"
                     data-todo-id={todo.id}
                     title={todo.title}
                     draggable={props.editingId !== todo.id ? "true" : "false"}

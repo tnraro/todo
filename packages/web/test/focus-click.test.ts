@@ -16,6 +16,7 @@ describe("todo click focuses edit input", () => {
       '[data-todo-id="t1"]',
     ) as HTMLElement | null;
     expect(card).toBeTruthy();
+    expect(card!.getAttribute("role")).toBe("button");
     expect(columnOf(card!)).toBe(0);
 
     // Browser behavior: mousedown focuses the clicked card first.

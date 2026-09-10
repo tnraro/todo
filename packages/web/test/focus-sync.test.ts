@@ -31,6 +31,11 @@ describe("offline outbox", () => {
       syncText().startsWith("Synced") ? document.body : null,
     );
     expect(syncText()).toBe("Synced");
+    expect(
+      document
+        .querySelector(".topbar-actions .sync-state")
+        ?.getAttribute("role"),
+    ).toBe("status");
 
     setBackendOffline(true);
     try {

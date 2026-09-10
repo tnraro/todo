@@ -137,6 +137,7 @@ describe("card context menu", () => {
     key("ArrowDown");
     await settle();
     const items = [...document.querySelectorAll(".sheet-item")];
+    expect(items.every((el) => el.getAttribute("role") === "menuitem")).toBe(true);
     expect(document.activeElement).toBe(items[1]);
 
     // Escape closes and returns focus to the card.
