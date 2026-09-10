@@ -39,6 +39,14 @@ textarea {
   -webkit-user-select: text;
 }
 
+/* Keyboard focus ring. Inputs keep their accent border as the indicator. */
+button:focus-visible,
+a:focus-visible,
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* --- Home --------------------------------------------------------------- */
 .home {
   max-width: 420px;
