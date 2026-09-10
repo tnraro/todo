@@ -27,6 +27,16 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* App-like: UI chrome and card text are drag/gesture surfaces, not text
+   * documents. Text fields stay selectable (exception below). */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* --- Home --------------------------------------------------------------- */
@@ -243,11 +253,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   outline: none;
-  /* Touch: single-tap zoom is already off via the viewport; keep scroll and
-   * text-selection gestures while the long-press timer runs in JS. */
+  /* Touch: single-tap zoom is already off via the viewport. */
   touch-action: pan-x pan-y;
-  -webkit-user-select: none;
-  user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
