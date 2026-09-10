@@ -100,7 +100,7 @@ Benefits:
 - Concurrent moves are serialized in server receive order. No merge needed.
 - Clients need no fractional-indexing library. Stays lightweight.
 
-Create position: top of the `todo` column. A create without explicit neighbors defaults to the top.
+Create position: bottom of the `todo` column. A create without explicit neighbors defaults to the bottom.
 
 ## 6. API Contract
 

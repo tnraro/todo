@@ -144,7 +144,8 @@ function parseNeighbors(body: Record<string, unknown>): Neighbors {
 /**
  * Resolve an insertion rank between two neighbor cards.
  * Unknown neighbors, neighbors in other columns, and the moving card itself
- * heal to open ends. Both ends open means "top of the column".
+ * heal to open ends. With both ends open, `fallback` decides between the top
+ * (move default) and the bottom (create default).
  */
 function resolveRank(
   db: Db,
@@ -152,6 +153,7 @@ function resolveRank(
   status: Status,
   neighbors: Neighbors,
   excludeId: string,
+  fallback: "top" | "bottom",
 ): string {
   let beforeRank = neighbors.beforeId
     ? (db.neighborRank(projectId, neighbors.beforeId, status, excludeId) ??
@@ -161,7 +163,11 @@ function resolveRank(
     ? (db.neighborRank(projectId, neighbors.afterId, status, excludeId) ?? null)
     : null;
   if (beforeRank === null && afterRank === null) {
-    afterRank = db.firstRankIn(projectId, status, excludeId) ?? null;
+    if (fallback === "bottom") {
+      beforeRank = db.lastRankIn(projectId, status, excludeId) ?? null;
+    } else {
+      afterRank = db.firstRankIn(projectId, status, excludeId) ?? null;
+    }
   }
   if (beforeRank !== null && afterRank !== null && beforeRank >= afterRank) {
     afterRank = null; // inconsistent pair: keep the upper anchor
@@ -283,7 +289,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
           if (db.todoExists(id)) {
             return json({ error: "todo id already used" }, 409);
           }
-          const rank = resolveRank(db, projectId, "todo", neighbors, "");
+          const rank = resolveRank(db, projectId, "todo", neighbors, "", "bottom");
           const todo: Todo = {
             id,
             projectId,
@@ -336,6 +342,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
               body.toStatus,
               neighbors,
               todoId,
+              "top",
             );
             const rev = db.moveTodo(projectId, todoId, body.toStatus, rank);
             if (rev === null) return notFound("todo not found");

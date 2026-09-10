@@ -62,18 +62,29 @@ function installBackend(
     return first;
   };
 
+  const lastRankIn = (status: string, excludeId: string): string | null => {
+    let last: string | null = null;
+    for (const t of store.values()) {
+      if (t.status !== status || t.id === excludeId) continue;
+      if (last === null || t.rank > last) last = t.rank;
+    }
+    return last;
+  };
+
   const resolveRank = (
     status: string,
     selfId: string,
     beforeId: unknown,
     afterId: unknown,
+    fallback: "top" | "bottom",
   ): string => {
     const neighbor = (n: unknown): string | null =>
       typeof n === "string" ? rankOf(status, n, selfId) : null;
     let before = neighbor(beforeId);
     let after = neighbor(afterId);
     if (before === null && after === null) {
-      after = firstRankIn(status, selfId);
+      if (fallback === "bottom") before = lastRankIn(status, selfId);
+      else after = firstRankIn(status, selfId);
     }
     if (before !== null && after !== null && before >= after) after = null;
     return keyBetween(before, after);
@@ -110,7 +121,13 @@ function installBackend(
         projectId: project.id,
         title: String(body.title),
         status: "todo",
-        rank: resolveRank("todo", String(body.id), body.beforeId, body.afterId),
+        rank: resolveRank(
+          "todo",
+          String(body.id),
+          body.beforeId,
+          body.afterId,
+          "bottom",
+        ),
         updatedAt: Date.now(),
       };
       store.set(todo.id, todo);
@@ -132,7 +149,13 @@ function installBackend(
       if (method === "PATCH") todo.title = String(body.title);
       if (m[3] === "/move") {
         todo.status = String(body.toStatus);
-        todo.rank = resolveRank(todo.status, todo.id, body.beforeId, body.afterId);
+        todo.rank = resolveRank(
+          todo.status,
+          todo.id,
+          body.beforeId,
+          body.afterId,
+          "top",
+        );
       }
       todo.updatedAt = Date.now();
       rev += 1;

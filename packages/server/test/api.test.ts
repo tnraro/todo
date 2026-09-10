@@ -70,7 +70,7 @@ describe("projects", () => {
 });
 
 describe("todos", () => {
-  test("create defaults to top, rename, move, heal, idempotency", async () => {
+  test("create defaults to bottom, rename, move, heal, idempotency", async () => {
     const { data } = await req("POST", "/api/projects", { title: "P" });
     const pid = data.id as string;
     const url = `/api/projects/${pid}/todos`;
@@ -84,9 +84,9 @@ describe("todos", () => {
     const a = await mk("a");
     const b = await mk("b");
     const c = await mk("c");
-    // Each create goes to the top: newest first.
+    // Each create appends to the bottom: oldest first.
     let snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
-    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["c", "b", "a"]);
+    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["a", "b", "c"]);
     expect(snap.rev).toBe(3);
 
     // Rename bumps rev, keeps rank.
@@ -96,23 +96,24 @@ describe("todos", () => {
     expect(renamed.data.todo.rank).toBe(a.rank);
     expect(renamed.data.rev).toBe(4);
 
-    // Move a to top with no neighbors (both open = top).
-    const moved = await req("POST", `${url}/a/move`, { toStatus: "todo" });
+    // Move c to top with no neighbors (both open = top). Moves keep the top
+    // fallback while creates default to the bottom.
+    const moved = await req("POST", `${url}/c/move`, { toStatus: "todo" });
     expect(moved.status).toBe(200);
     snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
-    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["a", "c", "b"]);
+    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["c", "a", "b"]);
 
-    // Move b between a and c via explicit neighbors.
+    // Move b between c and a via explicit neighbors.
     const ids = todosByStatus(snap, "todo").map((t) => t.id);
-    expect(ids).toEqual(["a", "c", "b"]);
+    expect(ids).toEqual(["c", "a", "b"]);
     const between = await req("POST", `${url}/b/move`, {
       toStatus: "todo",
-      beforeId: "a",
-      afterId: "c",
+      beforeId: "c",
+      afterId: "a",
     });
     expect(between.status).toBe(200);
     snap = (await req("GET", `/api/projects/${pid}`)).data as Snapshot;
-    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["a", "b", "c"]);
+    expect(todosByStatus(snap, "todo").map((t) => t.id)).toEqual(["c", "b", "a"]);
 
     // Unknown neighbors heal instead of erroring.
     const healed = await req("POST", `${url}/b/move`, {

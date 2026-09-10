@@ -622,15 +622,18 @@ function Board(props: { projectId: string }) {
     const clean = title.trim().slice(0, TODO_TITLE_MAX);
     if (!clean) return;
     const id = genTodoId();
+    // Mirror the server's create default: a new card lands at the bottom.
+    const col = columns().todo;
+    const lastRank = col.length > 0 ? col[col.length - 1].rank : null;
     const optimistic: Todo = {
       id,
       projectId: pid,
       title: clean,
       status: "todo",
-      rank: "",
+      rank: keyBetween(lastRank, null),
       updatedAt: 0,
     };
-    applyTodos((prev) => [optimistic, ...prev]);
+    applyTodos((prev) => [...prev, optimistic]);
     markPending(id);
     enqueueAndFlush(
       { projectId: pid, kind: "create", todoId: id, title: clean },

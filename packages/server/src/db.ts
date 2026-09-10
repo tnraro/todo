@@ -25,6 +25,7 @@ export interface Db {
     excludeId?: string,
   ): string | undefined;
   firstRankIn(projectId: string, status: Status, excludeId?: string): string | undefined;
+  lastRankIn(projectId: string, status: Status, excludeId?: string): string | undefined;
   createTodo(todo: Todo): number;
   renameTodo(projectId: string, todoId: string, title: string): number | null;
   moveTodo(
@@ -128,6 +129,9 @@ export function openDb(path: string): Db {
   );
   const selectFirstRank = db.prepare(
     "SELECT rank FROM todos WHERE project_id = ? AND status = ? AND id != ? ORDER BY rank, id LIMIT 1",
+  );
+  const selectLastRank = db.prepare(
+    "SELECT rank FROM todos WHERE project_id = ? AND status = ? AND id != ? ORDER BY rank DESC, id DESC LIMIT 1",
   );
   const insertTodo = db.prepare(
     "INSERT INTO todos (id, project_id, title, status, rank, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -240,6 +244,15 @@ export function openDb(path: string): Db {
 
     firstRankIn(projectId, status, excludeId = "") {
       const row = (selectFirstRank.get(
+        projectId,
+        status,
+        excludeId,
+      ) as { rank: string } | null) ?? null;
+      return row?.rank;
+    },
+
+    lastRankIn(projectId, status, excludeId = "") {
+      const row = (selectLastRank.get(
         projectId,
         status,
         excludeId,

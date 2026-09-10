@@ -189,6 +189,48 @@ describe("offline outbox", () => {
     expect(snap.todos[0].title.length).toBe(200);
     expect(snap.todos[0].title).toBe("x".repeat(200));
   });
+
+  test("new cards append to the bottom", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp({
+      project: { id: "sync4", title: "S4" },
+      todos: [
+        { id: "t1", projectId: "sync4", title: "first", status: "todo", rank: "5", updatedAt: 1 },
+      ],
+      rev: 0,
+    });
+    await settle();
+    await waitFor(2000, () => (syncText().startsWith("Synced") ? document.body : null));
+
+    (document.querySelector(".add-row") as HTMLElement).dispatchEvent(
+      new window.MouseEvent("click", { bubbles: true }),
+    );
+    const add = await waitFor(1000, () => {
+      const el = document.querySelector(
+        ".column .text-input",
+      ) as HTMLInputElement | null;
+      return el && document.activeElement === el ? el : null;
+    });
+    add!.value = "second";
+    add!.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await settle();
+    add!.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+    await settle();
+    await new Promise((r) => setTimeout(r, 300));
+    const ids = [...document.querySelectorAll("[data-todo-id]")].map(
+      (el) => (el as HTMLElement).dataset.todoId,
+    );
+    expect(ids[0]).toBe("t1");
+    expect(ids.length).toBe(2);
+
+    const snap = await fetch("/api/projects/sync4").then((r) => r.json());
+    const first = snap.todos.find((t: { id: string }) => t.id === "t1");
+    const second = snap.todos.find((t: { id: string }) => t.id !== "t1");
+    expect(second.rank > first.rank).toBe(true);
+  });
 });
 
 afterAll(async () => {
