@@ -31,6 +31,7 @@ docker compose up --build -d   # :3001, data in todo-data volume
 | `PORT` | `3001` | HTTP port |
 | `TODO_DB` | `data/app.db` | SQLite path (`:memory:` for ephemeral) |
 | `WEB_DIST` | `packages/web/dist` | Static dir (auto-detected) |
+| `TRUST_PROXY` | off | `1` trusts `X-Forwarded-For` for rate limiting (reverse proxy deployments) |
 
 ## Layout
 

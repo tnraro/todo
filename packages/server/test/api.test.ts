@@ -1,6 +1,6 @@
 // HTTP integration tests: REST contract, ordering, LWW revs, SSE stream.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createApp, setRateLimits } from "../src/index";
+import { createApp, clearRateBuckets, setRateLimits } from "../src/index";
 import { openDb, setLogCap } from "../src/db";
 import { EventHub } from "../src/events";
 import type { Snapshot, Todo } from "@todo/shared";
@@ -388,6 +388,45 @@ describe("request hardening", () => {
       expect((await req("PATCH", `/api/projects/${b}`, { title: "B1" })).status).toBe(200);
     } finally {
       setRateLimits(600, 1800);
+    }
+  });
+
+  test("x-forwarded-for is ignored unless trustProxy is set", async () => {
+    const post = (target: string, xff: string) =>
+      fetch(target + "/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": xff },
+        body: JSON.stringify({ title: "x" }),
+      });
+
+    clearRateBuckets();
+    setRateLimits(2, 1000);
+    try {
+      // Default: every request shares the socket-IP bucket, so spoofed values
+      // cannot mint fresh allowance.
+      expect((await post(base, "1.1.1.1")).status).toBe(201);
+      expect((await post(base, "2.2.2.2")).status).toBe(201);
+      expect((await post(base, "3.3.3.3")).status).toBe(429);
+
+      clearRateBuckets();
+      const proxied = createApp(openDb(":memory:"), {
+        distDir: null,
+        trustProxy: true,
+      });
+      const server = Bun.serve({ port: 0, fetch: proxied.fetch });
+      const base2 = `http://localhost:${server.port}`;
+      try {
+        expect((await post(base2, "7.7.7.7")).status).toBe(201);
+        expect((await post(base2, "7.7.7.7")).status).toBe(201);
+        expect((await post(base2, "7.7.7.7")).status).toBe(429);
+        // A different forwarded address gets its own bucket.
+        expect((await post(base2, "8.8.8.8")).status).toBe(201);
+      } finally {
+        server.stop(true);
+      }
+    } finally {
+      setRateLimits(600, 1800);
+      clearRateBuckets();
     }
   });
 });

@@ -22,6 +22,8 @@ export interface AppOptions {
   hub?: EventHub;
   /** Directory with the built web app (vite dist). Null disables static. */
   distDir?: string | null;
+  /** Trust X-Forwarded-For for rate limiting (set behind a reverse proxy). */
+  trustProxy?: boolean;
 }
 
 function json(data: unknown, status = 200): Response {
@@ -67,6 +69,12 @@ export function setRateLimits(ipMax: number, projectMax: number): void {
   RATE_PROJECT_MAX = projectMax;
 }
 
+/** Test-only hook to isolate window counts between suites. */
+export function clearRateBuckets(): void {
+  ipBuckets.clear();
+  projectBuckets.clear();
+}
+
 function overLimit(
   buckets: Map<string, { count: number; start: number }>,
   key: string,
@@ -83,13 +91,10 @@ function overLimit(
   return bucket.count > max;
 }
 
-function rateLimited(req: Request, projectId: string | null): boolean {
+function rateLimited(req: Request, ip: string, projectId: string | null): boolean {
   if (req.method !== "POST" && req.method !== "PATCH" && req.method !== "DELETE") {
     return false;
   }
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown";
   const now = Date.now();
   if (overLimit(ipBuckets, ip, RATE_IP_MAX, now)) return true;
   return (
@@ -180,6 +185,7 @@ const CONTENT_TYPES: Record<string, string> = {
 export function createApp(db: Db, options: AppOptions = {}) {
   const hub = options.hub ?? new EventHub();
   const distDir = options.distDir === undefined ? null : options.distDir;
+  const trustProxy = options.trustProxy ?? false;
 
   async function serveStatic(path: string): Promise<Response | null> {
     if (!distDir) return null;
@@ -194,12 +200,17 @@ export function createApp(db: Db, options: AppOptions = {}) {
 
   return {
     hub,
-    async fetch(req: Request, _server: Server): Promise<Response> {
+    async fetch(req: Request, server: Server): Promise<Response> {
       const url = new URL(req.url);
       const path = url.pathname;
       const projectMatch = path.match(/^\/api\/projects\/([^/]+)(\/.*)?$/);
+      // Spoofable header: only honored when the deployment declares a trusted
+      // reverse proxy in front (TRUST_PROXY=1).
+      const ip = trustProxy
+        ? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+        : server.requestIP?.(req)?.address ?? "unknown";
 
-      if (rateLimited(req, projectMatch?.[1] ?? null)) {
+      if (rateLimited(req, ip, projectMatch?.[1] ?? null)) {
         return json({ error: "rate limited" }, 429);
       }
 
@@ -379,6 +390,7 @@ if (import.meta.main) {
   const { existsSync } = await import("node:fs");
   const app = createApp(db, {
     distDir: existsSync(distDir) ? distDir : null,
+    trustProxy: process.env.TRUST_PROXY === "1",
   });
   Bun.serve({
     port,
