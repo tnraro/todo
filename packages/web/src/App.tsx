@@ -93,6 +93,25 @@ function removeRecent(id: string): { id: string; title: string }[] {
   }
 }
 
+// --- Archive collapse (localStorage only) -----------------------------------
+const ARCHIVE_KEY = "todo.archive-collapsed";
+
+function loadArchiveCollapsed(): boolean {
+  try {
+    return localStorage.getItem(ARCHIVE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function saveArchiveCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(ARCHIVE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Persistence is a nicety; the toggle always applies.
+  }
+}
+
 // --- Locale toggle ----------------------------------------------------------
 function LocaleToggle() {
   return (
@@ -206,6 +225,9 @@ function Board(props: { projectId: string }) {
   const [todos, setTodos] = createSignal<Todo[]>([]);
   const [conn, setConn] = createSignal<"live" | "reconnecting">("live");
   const [copied, setCopied] = createSignal(false);
+  const [archiveCollapsed, setArchiveCollapsed] = createSignal(
+    loadArchiveCollapsed(),
+  );
 
   // Editing state lives outside row data so re-renders never eat keystrokes.
   const [editingId, setEditingId] = createSignal<string | null>(null);
@@ -736,7 +758,17 @@ function Board(props: { projectId: string }) {
     const todo = todos().find((t) => t.id === id);
     if (!todo) return;
     if (todo.status !== "archive") {
+      // With the archive collapsed the moved card is not rendered, so focus
+      // stays in the source column instead of following into the rail.
+      const col = columns()[todo.status];
+      const i = col.findIndex((t) => t.id === id);
+      const nextId = col[i + 1]?.id ?? col[i - 1]?.id ?? null;
+      const collapsed = archiveCollapsed();
       handleMove(id, "archive", null, null);
+      if (collapsed) {
+        if (nextId) focusCard(nextId);
+        else (document.activeElement as HTMLElement | null)?.blur?.();
+      }
       return;
     }
     const prevList = todos();
@@ -830,12 +862,27 @@ function Board(props: { projectId: string }) {
     };
   }
 
+  function toggleArchive(): void {
+    const next = !archiveCollapsed();
+    setArchiveCollapsed(next);
+    saveArchiveCollapsed(next);
+  }
+
+  function ensureArchiveExpanded(): void {
+    if (archiveCollapsed()) {
+      setArchiveCollapsed(false);
+      saveArchiveCollapsed(false);
+    }
+  }
+
   function dropCard(
     id: string,
     toStatus: Status,
     beforeId: string | null,
     afterId: string | null,
   ): void {
+    // Moving a card into the collapsed archive reveals it so focus follows.
+    if (toStatus === "archive") ensureArchiveExpanded();
     const cur = currentNeighbors(id, toStatus);
     const todo = todos().find((t) => t.id === id);
     if (todo && todo.status === toStatus && cur.beforeId === beforeId && cur.afterId === afterId) {
@@ -881,11 +928,13 @@ function Board(props: { projectId: string }) {
 
   /** Focus where the user left off, or the first card when unknown. */
   function focusLastOrFirst(): void {
-    if (lastCardId && todos().some((t) => t.id === lastCardId)) {
-      focusCard(lastCardId);
+    const last = todos().find((t) => t.id === lastCardId);
+    if (last && !(last.status === "archive" && archiveCollapsed())) {
+      focusCard(last.id);
       return;
     }
     for (const s of STATUSES) {
+      if (s === "archive" && archiveCollapsed()) continue;
       const first = columns()[s][0];
       if (first) {
         focusCard(first.id);
@@ -979,7 +1028,8 @@ function Board(props: { projectId: string }) {
     while (
       ni >= 0 &&
       ni < STATUSES.length &&
-      columns()[STATUSES[ni]].length === 0
+      (columns()[STATUSES[ni]].length === 0 ||
+        (STATUSES[ni] === "archive" && archiveCollapsed()))
     ) {
       ni += dir;
     }
@@ -1235,10 +1285,17 @@ function Board(props: { projectId: string }) {
           <div class="project-title">{t().board.loading}</div>
           <span />
         </header>
-        <div class="columns">
+        <div class={["columns", archiveCollapsed() ? "archive-collapsed" : ""]}>
           <For each={STATUSES}>
             {(s) => (
-              <section class="column">
+              <section
+                class={[
+                  "column",
+                  s,
+                  s !== "doing" ? "dim" : "",
+                  s === "archive" && archiveCollapsed() ? "collapsed" : "",
+                ]}
+              >
                 <div class="column-head">{t().status[s]}</div>
               </section>
             )}
@@ -1335,12 +1392,14 @@ function Board(props: { projectId: string }) {
               <LocaleToggle />
               </div>
             </header>
-            <div class="columns">
+            <div class={["columns", archiveCollapsed() ? "archive-collapsed" : ""]}>
               <For each={STATUSES}>
                 {(status) => (
                   <Column
                     status={status}
                     todos={columns()[status]}
+                    collapsed={status === "archive" && archiveCollapsed()}
+                    onToggleArchive={toggleArchive}
                     adding={status === "todo" && adding()}
                     addDraft={addDraft()}
                     onAddDraft={setAddDraft}
@@ -1510,6 +1569,8 @@ function Board(props: { projectId: string }) {
 interface ColumnProps {
   status: Status;
   todos: Todo[];
+  collapsed: boolean;
+  onToggleArchive: () => void;
   adding: boolean;
   addDraft: string;
   onAddDraft: (text: string) => void;
@@ -1549,7 +1610,10 @@ function Column(props: ColumnProps) {
   const track = (e: DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-    const els = bodyEl?.querySelectorAll("[data-todo-id]");
+    // A collapsed archive renders no body; treat it as an empty drop zone.
+    const els = bodyEl?.isConnected
+      ? bodyEl.querySelectorAll("[data-todo-id]")
+      : null;
     let before: string | null = null;
     let after: string | null = null;
     els?.forEach((node) => {
@@ -1574,7 +1638,12 @@ function Column(props: ColumnProps) {
 
   return (
     <section
-      class={["column", props.status === "archive" ? "muted" : ""]}
+      class={[
+        "column",
+        props.status,
+        props.status !== "doing" ? "dim" : "",
+        props.collapsed ? "collapsed" : "",
+      ]}
       onDragOver={track}
       onDrop={(e) => {
         e.preventDefault();
@@ -1589,10 +1658,30 @@ function Column(props: ColumnProps) {
         }
       }}
     >
-      <div class="column-head">
-        {t().status[props.status]}
-        <span class="count">{props.todos.length}</span>
-      </div>
+      <Show
+        when={props.status === "archive"}
+        fallback={
+          <div class="column-head">
+            {t().status[props.status]}
+            <span class="count">{props.todos.length}</span>
+          </div>
+        }
+      >
+        <button
+          class="column-head archive-toggle"
+          aria-expanded={props.collapsed ? "false" : "true"}
+          aria-label={
+            props.collapsed
+              ? t().column.expandArchive
+              : t().column.collapseArchive
+          }
+          onClick={props.onToggleArchive}
+        >
+          <span class="toggle-chevron">{props.collapsed ? "‹" : "›"}</span>
+          <span class="archive-label">{t().status.archive}</span>
+          <span class="count">{props.todos.length}</span>
+        </button>
+      </Show>
       <Show when={props.status === "todo"}>
         <Show
           when={props.adding}
@@ -1616,73 +1705,75 @@ function Column(props: ColumnProps) {
           />
         </Show>
       </Show>
-      <div class="column-body" ref={bodyEl}>
-        <Show when={props.todos.length === 0 && posHere()}>
-          <div class="drop-empty" />
-        </Show>
-        <For each={props.todos}>
-          {(todo, i) => (
-            <>
-              <Show when={posHere()?.afterId === todo.id}>
-                <div class="drop-line" />
-              </Show>
-              <Show
-                when={props.editingId === todo.id}
-                fallback={
-                  <div
-                    class={[
-                      "card",
-                      props.pending[todo.id] ? "pending" : "",
-                      todo.id in props.flashes ? "flash" : "",
-                      props.draggingId === todo.id ? "dragging" : "",
-                    ]}
-                    tabindex="0"
-                    role="button"
-                    data-todo-id={todo.id}
-                    title={todo.title}
-                    draggable={props.editingId !== todo.id ? "true" : "false"}
-                    onDragStart={(e) => {
-                      e.dataTransfer?.setData("text/plain", todo.id);
-                      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-                      props.onDragStartCard(todo.id);
+      <Show when={!props.collapsed}>
+        <div class="column-body" ref={bodyEl}>
+          <Show when={props.todos.length === 0 && posHere()}>
+            <div class="drop-empty" />
+          </Show>
+          <For each={props.todos}>
+            {(todo, i) => (
+              <>
+                <Show when={posHere()?.afterId === todo.id}>
+                  <div class="drop-line" />
+                </Show>
+                <Show
+                  when={props.editingId === todo.id}
+                  fallback={
+                    <div
+                      class={[
+                        "card",
+                        props.pending[todo.id] ? "pending" : "",
+                        todo.id in props.flashes ? "flash" : "",
+                        props.draggingId === todo.id ? "dragging" : "",
+                      ]}
+                      tabindex="0"
+                      role="button"
+                      data-todo-id={todo.id}
+                      title={todo.title}
+                      draggable={props.editingId !== todo.id ? "true" : "false"}
+                      onDragStart={(e) => {
+                        e.dataTransfer?.setData("text/plain", todo.id);
+                        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+                        props.onDragStartCard(todo.id);
+                      }}
+                      onDragEnd={props.onDragEndCard}
+                      onClick={() => props.onStartEdit(todo.id)}
+                      onDblClick={() => props.onStartEdit(todo.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        props.onContextMenu(todo.id, e.clientX, e.clientY);
+                      }}
+                    >
+                      {todo.title}
+                    </div>
+                  }
+                >
+                  <input
+                    class="text-input card-input"
+                    value={props.drafts[todo.id] ?? todo.title}
+                    maxlength={TODO_TITLE_MAX}
+                    onInput={(e) => props.onDraft(todo.id, e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") props.onCommitEdit(todo.id, true);
                     }}
-                    onDragEnd={props.onDragEndCard}
-                    onClick={() => props.onStartEdit(todo.id)}
-                    onDblClick={() => props.onStartEdit(todo.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      props.onContextMenu(todo.id, e.clientX, e.clientY);
-                    }}
-                  >
-                    {todo.title}
-                  </div>
-                }
-              >
-                <input
-                  class="text-input card-input"
-                  value={props.drafts[todo.id] ?? todo.title}
-                  maxlength={TODO_TITLE_MAX}
-                  onInput={(e) => props.onDraft(todo.id, e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") props.onCommitEdit(todo.id, true);
-                  }}
-                  onBlur={() => props.onCommitEdit(todo.id, false)}
-                  ref={(el) => settleFocus(el, props.selectAll)}
-                />
-              </Show>
-              <Show
-                when={
-                  i() === props.todos.length - 1 &&
-                  posHere() !== null &&
-                  posHere()?.afterId === null
-                }
-              >
-                <div class="drop-line" />
-              </Show>
-            </>
-          )}
-        </For>
-      </div>
+                    onBlur={() => props.onCommitEdit(todo.id, false)}
+                    ref={(el) => settleFocus(el, props.selectAll)}
+                  />
+                </Show>
+                <Show
+                  when={
+                    i() === props.todos.length - 1 &&
+                    posHere() !== null &&
+                    posHere()?.afterId === null
+                  }
+                >
+                  <div class="drop-line" />
+                </Show>
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
     </section>
   );
 }

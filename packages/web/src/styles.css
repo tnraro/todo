@@ -244,8 +244,21 @@ a:focus-visible {
   font-weight: 400;
 }
 
-.muted .column-head {
+.dim .column-head {
   color: var(--text-faint);
+}
+
+/* Doing is the working column: normal text plus an accent rail. */
+.column.doing .column-head {
+  color: var(--text);
+}
+
+.column.doing .card {
+  border-left: 2px solid var(--accent);
+}
+
+.dim .card {
+  color: var(--text-dim);
 }
 
 .column-body {
@@ -256,6 +269,41 @@ a:focus-visible {
   padding: 0 4px 24px;
   flex: 1;
   min-height: 40px;
+}
+
+/* Collapsed archive: a narrow rail that expands on header click. */
+.columns.archive-collapsed {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 34px;
+}
+
+.column.collapsed .column-body {
+  display: none;
+}
+
+.column.collapsed .column-head {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  height: auto;
+  padding: 8px 2px;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.column.collapsed .archive-label {
+  display: none;
+}
+
+.archive-toggle {
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+.archive-toggle:hover {
+  background: var(--panel);
 }
 
 /* --- Cards --------------------------------------------------------------- */
@@ -288,10 +336,6 @@ a:focus-visible {
 
 .card.flash {
   animation: flash 650ms ease-out;
-}
-
-.muted .card {
-  color: var(--text-dim);
 }
 
 @keyframes flash {
@@ -513,6 +557,9 @@ a:focus-visible {
     scroll-snap-type: x mandatory;
     scroll-padding-left: 12px;
     overscroll-behavior-x: contain;
+  }
+  .columns.archive-collapsed {
+    grid-template-columns: repeat(3, 280px) 34px;
   }
   .column {
     scroll-snap-align: start;

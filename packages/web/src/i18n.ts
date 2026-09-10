@@ -41,6 +41,8 @@ const en = {
   column: {
     add: "+ Add",
     newTodoPlaceholder: "New todo, Enter to add…",
+    expandArchive: "Expand archive",
+    collapseArchive: "Collapse archive",
   },
   sync: {
     synced: "Synced",
@@ -108,6 +110,8 @@ const ko: Dict = {
   column: {
     add: "+ 추가",
     newTodoPlaceholder: "새 할 일, Enter로 추가…",
+    expandArchive: "보관함 펼치기",
+    collapseArchive: "보관함 접기",
   },
   sync: {
     synced: "동기화됨",

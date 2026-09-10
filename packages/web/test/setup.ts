@@ -88,6 +88,15 @@ export function columnOf(el: HTMLElement): number {
   return cols.findIndex((c) => c.contains(el));
 }
 
+/** Expand the archive rail when collapsed (the board renders it collapsed). */
+export async function expandArchive(): Promise<void> {
+  if (!document.querySelector(".columns.archive-collapsed")) return;
+  (document.querySelector(".archive-toggle") as HTMLElement | null)?.click();
+  await waitFor(1000, () =>
+    document.querySelector(".columns.archive-collapsed") ? null : document.body,
+  );
+}
+
 export function columnIds(column: number): string[] {
   const cols = document.querySelectorAll(".columns .column");
   return [...(cols[column]?.querySelectorAll("[data-todo-id]") ?? [])].map(

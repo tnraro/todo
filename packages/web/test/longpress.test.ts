@@ -3,7 +3,7 @@
 // Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
-import { columnIds, initDom, waitFor } from "./setup";
+import { columnIds, expandArchive, initDom, waitFor } from "./setup";
 
 const window = initDom("http://localhost/p/hold1");
 
@@ -21,6 +21,7 @@ describe("card context menu", () => {
     const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
+    await expandArchive();
     await waitFor(2000, () =>
       columnIds(0).includes("h1") ? document.body : null,
     );
@@ -152,6 +153,7 @@ describe("card context menu", () => {
     const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
+    await expandArchive();
     await waitFor(2000, () =>
       columnIds(3).includes("h2") ? document.body : null,
     );

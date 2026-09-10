@@ -175,17 +175,18 @@ Presence (viewers, cursors, avatars) is excluded on purpose. It conflicts with l
 +------------------------------------------------+
 | ‹  title (centered, inline edit)  [Copy link]  |  h 40px
 +----------+----------+----------+--------------+
-| todo  n  | doing  n | done  n  | archive  n   |  h 28px, with counts
+| todo  n  | doing  n | done  n  | ar ›n        |  h 28px, with counts
 | + Add    |          |          |              |
-| [card]   | [card]   | [card]   | [muted card] |
-| [card]   |          | [card]   |              |
+| [dim]    | [card]   | [dim]    |              |
+| [dim]    |          | [dim]    |              |
 +----------+----------+----------+--------------+
 ```
 
 - No page scroll. Fixed 40px header; each column scrolls vertically.
 - Four equal columns, 8px column gap, 12px page side padding. Card padding `6px 8px`, radius 6px, font 13px, line-height 1.35.
 - Card content is a one-line truncated title. No wrapping. Long titles show on hover tooltip and expand inline on click-to-edit.
-- `archive` is muted visually (gray text, low contrast) but functionally identical. Always visible as the fourth column. No collapse.
+- Visual hierarchy: `doing` is the working column (normal text plus a 2px accent left rail on cards); `todo`, `done`, and `archive` are dimmed (gray text, low contrast).
+- `archive` starts as a narrow collapsed rail showing only its chevron and count; clicking the header expands it to a full column. The expanded/collapsed choice persists in `localStorage` (not synced). Moving a card into a collapsed archive expands it so focus can follow. Functionally identical to any column when expanded.
 - Mobile: horizontal scroll with fixed 280px column width and mandatory
   column snap. No stacked reflow.
   Touch: native DnD never fires for touch, so a card hold (or desktop

@@ -3,7 +3,7 @@
 // sibling (previous when last, nowhere when the column empties).
 // Run via `bun run test:web`.
 import { afterAll, describe, expect, test } from "bun:test";
-import { columnIds, focusedCardIn, initDom, waitFor } from "./setup";
+import { columnIds, expandArchive, focusedCardIn, initDom, waitFor } from "./setup";
 
 const window = initDom("http://localhost/p/del123");
 
@@ -28,6 +28,7 @@ describe("delete key", () => {
     const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
+    await expandArchive();
     expect(columnIds(0)).toEqual(["x1"]);
     expect(columnIds(3)).toEqual(["a1", "a2"]);
 
@@ -78,6 +79,7 @@ describe("delete key", () => {
       rev: 0,
     });
     await settle();
+    await expandArchive();
 
     const card = (id: string): HTMLElement =>
       document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
