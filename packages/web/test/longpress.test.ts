@@ -1,6 +1,6 @@
 // Card context menu: touch holds and desktop right-clicks open the action
 // sheet instead of the browser menu, wired to the same ops as the keyboard.
-// Run via `bun run test:focus`.
+// Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { columnIds, initDom, waitFor } from "./setup";
@@ -18,7 +18,7 @@ const board = {
 
 describe("card context menu", () => {
   test("opens the sheet; actions move cards", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     await waitFor(2000, () =>
@@ -92,7 +92,7 @@ describe("card context menu", () => {
   });
 
   test("the sheet owns the keyboard while open", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     await waitFor(2000, () =>
@@ -149,7 +149,7 @@ describe("card context menu", () => {
   });
 
   test("permanent delete needs a second tap", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     await waitFor(2000, () =>

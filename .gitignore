@@ -1,4 +1,4 @@
 node_modules/
 packages/server/data/
 packages/web/dist/
-packages/web/dist-focus/
+packages/web/dist-test/

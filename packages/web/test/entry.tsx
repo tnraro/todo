@@ -1,4 +1,4 @@
-// DOM-test harness entry. Bundled by vite.focus.config.ts and driven by
+// DOM-test harness entry. Bundled by vite.test.config.ts and driven by
 // test/focus.test.ts under happy-dom. Installs fetch/EventSource stubs so no
 // network is needed.
 import { render } from "@solidjs/web";

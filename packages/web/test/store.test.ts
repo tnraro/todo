@@ -1,5 +1,5 @@
 // Store contract tests: run the same suite against IndexedDB
-// (fake-indexeddb) and the in-memory fallback. Run via `bun run test:focus`.
+// (fake-indexeddb) and the in-memory fallback. Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, test } from "bun:test";
 import {

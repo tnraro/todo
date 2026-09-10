@@ -1,5 +1,5 @@
 // Forget: removes the local copy (IndexedDB rows + recent entry) while the
-// server copy stays. Run via `bun run test:focus`.
+// server copy stays. Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { initDom, waitFor } from "./setup";
@@ -20,7 +20,7 @@ describe("forget", () => {
       JSON.stringify([{ id: "gone1", title: "Gone" }]),
     );
 
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({ project: { id: "x", title: "x" }, todos: [], rev: 0 });
     await settle();
 

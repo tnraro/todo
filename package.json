@@ -11,7 +11,8 @@
     "dev:web": "bun --cwd packages/web vite",
     "build": "bun --cwd packages/web vite build",
     "start": "bun --cwd packages/server src/index.ts",
-    "test": "bun test packages/server",
+    "test": "bun test packages/server && bun run --cwd packages/web test:web",
+    "test:server": "bun test packages/server",
     "typecheck": "bun --cwd packages/web tsc --noEmit"
   }
 }

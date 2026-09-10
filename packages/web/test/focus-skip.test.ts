@@ -1,6 +1,6 @@
 // Horizontal navigation skips empty columns: with focus on a card, Left/Right
 // lands on the next populated column at the same position, or stays put past
-// the edges. Run via `bun run test:focus`.
+// the edges. Run via `bun run test:web`.
 import { afterAll, describe, expect, test } from "bun:test";
 import { columnIds, focusedCardIn, initDom, waitFor } from "./setup";
 
@@ -26,7 +26,7 @@ function key(target: HTMLElement, keyName: string): void {
 
 describe("horizontal navigation skips empty columns", () => {
   test("right jumps the gap, left comes back, edges hold", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     expect(columnIds(0)).toEqual(["s1a", "s1b"]);

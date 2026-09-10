@@ -1,6 +1,6 @@
 // Regression test for: "clicking a todo must focus its edit input".
 // Simulates the browser sequence mousedown-focus + click.
-// Run via `bun run test:focus` (builds the harness bundle first).
+// Run via `bun run test:web` (builds the harness bundle first).
 import { afterAll, describe, expect, test } from "bun:test";
 import { columnOf, focusedEditInput, initDom, snapshot, waitFor } from "./setup";
 
@@ -8,7 +8,7 @@ const window = initDom("http://localhost/p/test123");
 
 describe("todo click focuses edit input", () => {
   test("single click moves focus into the input", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(snapshot);
     await settle();
 

@@ -1,7 +1,7 @@
 // Delete key: a non-archived card goes straight to the top of archive;
 // an archived card is permanently deleted, with focus moving to the next
 // sibling (previous when last, nowhere when the column empties).
-// Run via `bun run test:focus`.
+// Run via `bun run test:web`.
 import { afterAll, describe, expect, test } from "bun:test";
 import { columnIds, focusedCardIn, initDom, waitFor } from "./setup";
 
@@ -25,7 +25,7 @@ function key(target: HTMLElement, keyName: string): void {
 
 describe("delete key", () => {
   test("archive first, then permanent delete with focus handoff", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     expect(columnIds(0)).toEqual(["x1"]);
@@ -69,7 +69,7 @@ describe("delete key", () => {
   });
 
   test("held-key auto-repeat does not hard delete", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({
       project: { id: "del123", title: "D" },
       todos: [

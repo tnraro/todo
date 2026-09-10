@@ -14,7 +14,7 @@ describe("pending reconciliation", () => {
     ]);
     seed.close();
 
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({
       project: { id: "pend1", title: "P1" },
       todos: [

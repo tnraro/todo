@@ -1,6 +1,6 @@
 // Offline outbox loop: mutations made while the backend is down stay queued
 // (Syncing + pending count), then flush on reconnect and converge.
-// Run via `bun run test:focus`.
+// Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { initDom, waitFor } from "./setup";
@@ -23,7 +23,7 @@ function syncText(): string {
 
 describe("offline outbox", () => {
   test("queues while offline, flushes on reconnect", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     // Boot now opens IndexedDB before fetching, so allow extra flushes.
@@ -88,7 +88,7 @@ describe("offline outbox", () => {
   });
 
   test("a 400 response converges the op instead of wedging the queue", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({
       project: { id: "sync2", title: "S2" },
       todos: [
@@ -162,7 +162,7 @@ describe("offline outbox", () => {
   });
 
   test("overlong titles are clamped before they reach the server", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({
       project: { id: "sync3", title: "S3" },
       todos: [
@@ -196,7 +196,7 @@ describe("offline outbox", () => {
   });
 
   test("new cards append to the bottom", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({
       project: { id: "sync4", title: "S4" },
       todos: [

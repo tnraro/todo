@@ -1,6 +1,6 @@
 // i18n tests. The parity test imports the source module directly (no DOM);
 // the toggle test drives the built harness under happy-dom like the focus
-// tests. Run via `bun run test:focus`.
+// tests. Run via `bun run test:web`.
 import { afterAll, describe, expect, test } from "bun:test";
 import { dictionaries } from "../src/i18n";
 import { initDom, snapshot, waitFor } from "./setup";
@@ -32,7 +32,7 @@ const window = initDom("http://localhost/p/test123");
 
 describe("locale toggle", () => {
   test("switches UI text and persists", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(snapshot);
     await settle();
 

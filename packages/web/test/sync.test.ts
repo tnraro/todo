@@ -1,5 +1,5 @@
 // Unit tests for outbox collapsing (pure logic, no DOM).
-// Run via `bun run test:focus`.
+// Run via `bun run test:web`.
 import { describe, expect, test } from "bun:test";
 import { collapseOps } from "../src/sync";
 import type { OutboxOp } from "../src/store";

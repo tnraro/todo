@@ -1,6 +1,6 @@
 node_modules
 packages/web/dist
-packages/web/dist-focus
+packages/web/dist-test
 packages/server/data
 data
 .git

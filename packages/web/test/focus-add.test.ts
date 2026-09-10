@@ -1,5 +1,5 @@
 // Add row termination policy: Enter on an empty input closes it, blur closes
-// but keeps the draft, Escape discards. Run via `bun run test:focus`.
+// but keeps the draft, Escape discards. Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { initDom, waitFor } from "./setup";
@@ -27,7 +27,7 @@ function openAddRow(): void {
 
 describe("add row", () => {
   test("empty Enter closes, blur keeps the draft", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
 

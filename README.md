@@ -45,9 +45,14 @@ packages/
 ## Verify
 
 ```sh
-bun test packages/server   # REST, ordering, SSE, log, static
-bun run test:focus         # DOM suite (focus, keyboard, sync, i18n)
+bun run test             # server + web suites
+bun run test:server      # REST, ordering, SSE, log, static
+bun run test:web         # DOM suite (one process per test file)
 bun run typecheck
 ```
+
+Run `bun run test` (or the scoped scripts). A bare `bun test` at the repo root
+must not be used: the web harness stubs global `fetch`/`window`, which breaks
+the server suite.
 
 Design details live in `DESIGN.md`.

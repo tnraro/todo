@@ -1,5 +1,5 @@
 // Home create failure must surface an inline error instead of failing
-// silently. Run via `bun run test:focus`.
+// silently. Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { initDom, waitFor } from "./setup";
@@ -8,7 +8,7 @@ const window = initDom("http://localhost/");
 
 describe("home create", () => {
   test("a failed create shows an inline error", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp({ project: { id: "x", title: "x" }, todos: [], rev: 0 });
     await settle();
 

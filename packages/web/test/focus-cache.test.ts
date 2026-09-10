@@ -1,5 +1,5 @@
 // Boot-from-cache: with the network snapshot hanging forever, the board
-// must still render from IndexedDB. Run via `bun run test:focus`.
+// must still render from IndexedDB. Run via `bun run test:web`.
 import "fake-indexeddb/auto";
 import { afterAll, describe, expect, test } from "bun:test";
 import { initDom } from "./setup";
@@ -16,7 +16,7 @@ describe("boot from cache", () => {
     ]);
     seed.close();
 
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(
       { project: { id: "cache1", title: "X" }, todos: [], rev: 0 },
       { hangSnapshot: true },

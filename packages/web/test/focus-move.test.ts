@@ -1,7 +1,7 @@
 // Keyboard scheme: plain arrows navigate focus between cards, Ctrl+arrows
 // move the card (Left/Right across columns, Up/Down reorder). Moving remounts
 // the card, so focus must follow through the optimistic remount and the async
-// server-echo remount. Run via `bun run test:focus`.
+// server-echo remount. Run via `bun run test:web`.
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   columnIds,
@@ -31,7 +31,7 @@ function key(target: HTMLElement, keyName: string, ctrl = false): void {
 
 describe("keyboard arrows", () => {
   test("plain arrows navigate, ctrl+arrows move, focus follows", async () => {
-    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    const { mountApp, settle } = await import("../dist-test/harness.js");
     await mountApp(board);
     await settle();
     expect(columnIds(0)).toEqual(["t1", "t2"]);

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:focus": "vite build --config vite.focus.config.ts && bun test test/focus-click.test.ts && bun test test/focus-move.test.ts && bun test test/focus-skip.test.ts && bun test test/focus-delete.test.ts && bun test test/i18n.test.ts && bun test test/store.test.ts && bun test test/focus-cache.test.ts && bun test test/focus-pending.test.ts && bun test test/focus-url.test.ts && bun test test/focus-events.test.ts && bun test test/focus-home.test.ts && bun test test/focus-add.test.ts && bun test test/sync.test.ts && bun test test/focus-sync.test.ts && bun test test/forget.test.ts && bun test test/longpress.test.ts"
+    "test:web": "bun scripts/test.ts"
   },
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.7",
