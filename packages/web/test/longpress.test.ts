@@ -90,6 +90,61 @@ describe("card context menu", () => {
     expect(sheetShown()).toBeNull();
     expect(columnIds(3)).toEqual(["h2"]);
   });
+
+  test("the sheet owns the keyboard while open", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp(board);
+    await settle();
+    await waitFor(2000, () =>
+      columnIds(0).includes("h1") ? document.body : null,
+    );
+
+    const card = (id: string): HTMLElement =>
+      document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
+    const sheetShown = () =>
+      document.querySelector(".sheet") as HTMLElement | null;
+    card("h1").focus();
+    card("h1").dispatchEvent(
+      new window.MouseEvent("contextmenu", {
+        bubbles: true,
+        clientX: 100,
+        clientY: 120,
+      }),
+    );
+
+    // Opening focuses the first action so Enter/Space and arrow keys work.
+    const first = await waitFor(1000, () => {
+      const el = document.activeElement as HTMLElement | null;
+      return el?.classList.contains("sheet-item") ? el : null;
+    });
+    expect(first).toBeTruthy();
+
+    const key = (keyName: string) =>
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: keyName, bubbles: true }),
+      );
+
+    // Board shortcuts must not reach the cards behind the scrim.
+    key("n");
+    await settle();
+    expect(document.querySelector(".column .text-input")).toBeNull();
+    key("Delete");
+    await settle();
+    expect(columnIds(0)).toEqual(["h1"]);
+    expect(sheetShown()).toBeTruthy();
+
+    // Arrows move between actions.
+    key("ArrowDown");
+    await settle();
+    const items = [...document.querySelectorAll(".sheet-item")];
+    expect(document.activeElement).toBe(items[1]);
+
+    // Escape closes and returns focus to the card.
+    key("Escape");
+    await waitFor(1000, () => (!sheetShown() ? document.body : null));
+    expect(sheetShown()).toBeNull();
+    expect(document.activeElement).toBe(card("h1"));
+  });
 });
 
 afterAll(async () => {

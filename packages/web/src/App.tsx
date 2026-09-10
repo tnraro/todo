@@ -899,11 +899,22 @@ function Board(props: { projectId: string }) {
       y: Math.max(8, Math.min(y, window.innerHeight - MENU_H)),
     });
     setMenuFor(id);
+    // Focus the first action so Enter/Space activates it and arrows navigate.
+    requestAnimationFrame(() => {
+      if (!menuFor()) return;
+      document
+        .querySelector<HTMLElement>(".sheet")
+        ?.querySelector<HTMLElement>(".sheet-item")
+        ?.focus();
+    });
   }
 
   function closeMenu(): void {
+    const id = menuFor();
     setMenuFor(null);
     setMenuAt(null);
+    // Keyboard and scrim closes return focus to the card the menu was for.
+    if (id && todos().some((t) => t.id === id)) focusCard(id);
   }
 
   function onCardContextMenu(id: string, x: number, y: number): void {
@@ -951,6 +962,28 @@ function Board(props: { projectId: string }) {
   }
 
   function onBoardKeyDown(e: KeyboardEvent): void {
+    // The action sheet owns the keyboard while open: board shortcuts (n,
+    // Delete, arrows) must not reach the cards behind the scrim.
+    if (menuFor()) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMenu();
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = [...document.querySelectorAll<HTMLElement>(".sheet-item")];
+        if (items.length === 0) return;
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        const dir = e.key === "ArrowDown" ? 1 : -1;
+        const next =
+          at < 0
+            ? dir > 0
+              ? 0
+              : items.length - 1
+            : (at + dir + items.length) % items.length;
+        items[next].focus();
+      }
+      return;
+    }
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName ?? "";
     const inInput = tag === "INPUT" || tag === "TEXTAREA";
