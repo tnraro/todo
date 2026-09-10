@@ -110,11 +110,13 @@ function LocaleToggle() {
 function Home() {
   const [title, setTitle] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
   const [recents, setRecents] = createSignal(loadRecents());
 
   const create = async () => {
     if (busy()) return;
     setBusy(true);
+    setError(null);
     try {
       const clean =
         title().trim().slice(0, PROJECT_TITLE_MAX) || t().untitled;
@@ -122,6 +124,7 @@ function Home() {
       location.href = `/p/${project.id}`;
     } catch {
       // Keep the draft; the button is the retry.
+      setError(t().home.createFailed);
     } finally {
       setBusy(false);
     }
@@ -161,6 +164,9 @@ function Home() {
           {t().home.newProject}
         </button>
       </div>
+      <Show when={error()}>
+        {(msg) => <p class="home-error">{msg()}</p>}
+      </Show>
       <Show when={recents().length > 0}>
         <div class="recents">
           <div class="recents-title">{t().home.recent}</div>
@@ -227,8 +233,6 @@ function Board(props: { projectId: string }) {
   let lastCardId: string | null = null;
 
   // --- Sync engine state ----------------------------------------------------
-  /** This page load's id; outbox rows carry it for multi-tab debugging. */
-  const tabId = genTodoId();
   /** Local deletes by todo id. Suppresses only events at or below the
    * recorded rev (P0-1: server ids are reusable, so tombstones expire). */
   const tombstones = new Map<string, { rev: number }>();
@@ -482,14 +486,14 @@ function Board(props: { projectId: string }) {
   }
 
   function enqueueAndFlush(
-    op: Omit<OutboxOp, "seq" | "opId" | "tabId" | "attempts" | "createdAt">,
+    op: Omit<OutboxOp, "seq" | "attempts" | "createdAt">,
     rollback: () => void,
   ): void {
     const s = store;
     if (!s) return;
     void (async () => {
       try {
-        await s.enqueue({ ...op, opId: genTodoId(), tabId });
+        await s.enqueue(op);
       } catch {
         rollback();
         return;

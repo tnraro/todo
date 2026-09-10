@@ -46,6 +46,12 @@ body {
   gap: 8px;
 }
 
+.home-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
 .recents {
   margin-top: 24px;
 }

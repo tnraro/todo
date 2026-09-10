@@ -57,16 +57,16 @@ for (const [name, open] of implementations) {
 
     test("outbox is FIFO per project", async () => {
       await fresh();
-      await store.enqueue({ opId: "o1", tabId: "t", projectId: pid, kind: "rename", todoId: "a", title: "x" });
-      await store.enqueue({ opId: "o2", tabId: "t", projectId: pid, kind: "move", todoId: "a", toStatus: "doing", beforeId: null, afterId: null });
-      await store.enqueue({ opId: "o3", tabId: "t", projectId: "other", kind: "rename", todoId: "z", title: "z" });
+      await store.enqueue({ projectId: pid, kind: "rename", todoId: "a", title: "x" });
+      await store.enqueue({ projectId: pid, kind: "move", todoId: "a", toStatus: "doing", beforeId: null, afterId: null });
+      await store.enqueue({ projectId: "other", kind: "rename", todoId: "z", title: "z" });
       const ops = await store.listOutbox(pid);
-      expect(ops.map((o) => o.opId)).toEqual(["o1", "o2"]);
+      expect(ops.map((o) => o.kind)).toEqual(["rename", "move"]);
       expect(ops[0].attempts).toBe(0);
       await store.setAttempts(ops[0].seq!, 3);
       expect((await store.listOutbox(pid))[0].attempts).toBe(3);
       await store.removeOps([ops[0].seq!]);
-      expect((await store.listOutbox(pid)).map((o) => o.opId)).toEqual(["o2"]);
+      expect((await store.listOutbox(pid)).map((o) => o.kind)).toEqual(["move"]);
     });
 
     test("replaceTodos swaps a project's set", async () => {
@@ -111,7 +111,7 @@ for (const [name, open] of implementations) {
       await store.putTodos([
         { id: "a", projectId: pid, title: "a", status: "todo", rank: "5", updatedAt: 1, pending: false },
       ]);
-      await store.enqueue({ opId: "o1", tabId: "t", projectId: pid, kind: "rename", todoId: "a", title: "x" });
+      await store.enqueue({ projectId: pid, kind: "rename", todoId: "a", title: "x" });
       await store.putTombstone({ todoId: "g", projectId: pid, rev: 2, deletedAt: 1 });
       await store.clearProject(pid);
       expect(await store.getProject(pid)).toBeUndefined();

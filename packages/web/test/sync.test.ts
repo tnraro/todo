@@ -8,8 +8,6 @@ let seq = 0;
 function op(partial: Partial<OutboxOp> & { kind: OutboxOp["kind"] }): OutboxOp {
   return {
     seq: ++seq,
-    opId: `op${seq}`,
-    tabId: "t",
     projectId: "p",
     attempts: 0,
     createdAt: 0,

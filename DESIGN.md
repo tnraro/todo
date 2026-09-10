@@ -80,7 +80,8 @@ Storing order as a `todo[]` array on the project conflicts with LWW: one full-ar
 Rules:
 
 1. Store order as a scalar `rank` on each todo, not as an array.
-2. The server computes `rank`. Clients never compute it.
+2. The server owns `rank`. A client may estimate one only to place its
+   optimistic card; the server echo is the authority and overwrites it.
 3. A move request expresses intent, not state: `toStatus, beforeId, afterId`.
 
 Example:

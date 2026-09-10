@@ -22,9 +22,6 @@ export type OpKind = "create" | "rename" | "move" | "delete" | "projectRename";
 
 export interface OutboxOp {
   seq?: number;
-  /** Idempotency key, stable across retries. */
-  opId: string;
-  tabId: string;
   projectId: string;
   kind: OpKind;
   todoId?: string;

@@ -14,9 +14,8 @@ export default defineConfig({
       // injectRegister:false keeps that manual call the single path.
       injectRegister: false,
       injectManifest: {
-        // Manifest icons are precached automatically; keep the glob to build
-        // outputs only.
-        globPatterns: ["**/*.{js,css,html}"],
+        // Build outputs plus the SVG icon; PNG install criteria are deferred.
+        globPatterns: ["**/*.{js,css,html,svg}"],
       },
       manifest: {
         name: "todo",

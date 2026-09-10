@@ -21,6 +21,7 @@ const en = {
   home: {
     titlePlaceholder: "New project title…",
     newProject: "New project",
+    createFailed: "Could not create. Try again.",
     recent: "Recent",
     forget: "Forget this project locally",
   },
@@ -85,6 +86,7 @@ const ko: Dict = {
   home: {
     titlePlaceholder: "새 프로젝트 이름…",
     newProject: "새 프로젝트",
+    createFailed: "만들지 못했습니다. 다시 시도하세요.",
     recent: "최근",
     forget: "이 기기에서 이 프로젝트 지우기",
   },
