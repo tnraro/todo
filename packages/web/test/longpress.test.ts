@@ -147,6 +147,51 @@ describe("card context menu", () => {
     expect(sheetShown()).toBeNull();
     expect(document.activeElement).toBe(card("h1"));
   });
+
+  test("permanent delete needs a second tap", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp(board);
+    await settle();
+    await waitFor(2000, () =>
+      columnIds(3).includes("h2") ? document.body : null,
+    );
+
+    const h2 = document.querySelector('[data-todo-id="h2"]') as HTMLElement;
+    h2.dispatchEvent(
+      new window.MouseEvent("contextmenu", {
+        bubbles: true,
+        clientX: 120,
+        clientY: 140,
+      }),
+    );
+    const shown = await waitFor(1000, () =>
+      document.querySelector(".sheet") ? document.body : null,
+    );
+    expect(shown).toBeTruthy();
+
+    const danger = document.querySelector(
+      ".sheet-item.danger",
+    ) as HTMLButtonElement;
+    expect(danger.textContent).toContain("Delete");
+
+    // First tap arms the confirmation; nothing is deleted yet.
+    danger.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(document.querySelector(".sheet")).toBeTruthy();
+    expect(danger.textContent).toContain("Confirm delete");
+    expect(columnIds(3)).toEqual(["h2"]);
+
+    // Second tap deletes.
+    danger.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await waitFor(1500, () =>
+      !document.querySelector(".sheet") ? document.body : null,
+    );
+    expect(document.querySelector(".sheet")).toBeNull();
+    await waitFor(1500, () =>
+      columnIds(3).length === 0 ? document.body : null,
+    );
+    expect(columnIds(3)).toEqual([]);
+  });
 });
 
 afterAll(async () => {

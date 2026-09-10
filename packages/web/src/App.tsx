@@ -909,6 +909,8 @@ function Board(props: { projectId: string }) {
   // their native menu (paste) since the handler lives on cards only.
   const [menuFor, setMenuFor] = createSignal<string | null>(null);
   const [menuAt, setMenuAt] = createSignal<{ x: number; y: number } | null>(null);
+  /** Card id whose permanent delete is armed for a second confirming tap. */
+  const [confirmDelete, setConfirmDelete] = createSignal<string | null>(null);
   // Desktop dropdown size estimate for viewport clamping.
   const MENU_W = 230;
   const MENU_H = 320;
@@ -938,6 +940,7 @@ function Board(props: { projectId: string }) {
     const id = menuFor();
     setMenuFor(null);
     setMenuAt(null);
+    setConfirmDelete(null);
     // Keyboard and scrim closes return focus to the card the menu was for.
     if (id && todos().some((t) => t.id === id)) focusCard(id);
   }
@@ -1473,9 +1476,23 @@ function Board(props: { projectId: string }) {
                       <button
                         class="sheet-item danger"
                         role="menuitem"
-                        onClick={act((id) => handleDelete(id))}
+                        onClick={() => {
+                          const id = getId();
+                          // Archiving is reversible; permanent delete needs
+                          // a second, confirming tap.
+                          if (!archived() || confirmDelete() === id) {
+                            closeMenu();
+                            handleDelete(id);
+                          } else {
+                            setConfirmDelete(id);
+                          }
+                        }}
                       >
-                        {archived() ? t().menu.delete : t().menu.archive}
+                        {confirmDelete() === getId()
+                          ? t().menu.confirmDelete
+                          : archived()
+                            ? t().menu.delete
+                            : t().menu.archive}
                       </button>
                     </div>
                   </>

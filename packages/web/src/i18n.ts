@@ -67,6 +67,7 @@ const en = {
     down: "Move down",
     archive: "Archive",
     delete: "Delete",
+    confirmDelete: "Confirm delete",
   },
 };
 
@@ -133,6 +134,7 @@ const ko: Dict = {
     down: "아래로",
     archive: "보관",
     delete: "삭제",
+    confirmDelete: "삭제 확인",
   },
 };
 
