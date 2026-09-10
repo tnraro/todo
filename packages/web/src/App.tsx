@@ -1317,13 +1317,15 @@ function Board(props: { projectId: string }) {
                     onAddDraft={setAddDraft}
                     onStartAdd={() => setAdding(true)}
                     onCommitAdd={(title) => {
+                      // Enter on an empty input cancels the add row.
+                      if (!title.trim()) {
+                        setAdding(false);
+                        return;
+                      }
                       handleCreate(title);
                       setAddDraft("");
                     }}
-                    onCancelAdd={() => {
-                      setAdding(false);
-                      setAddDraft("");
-                    }}
+                    onCloseAdd={() => setAdding(false)}
                     editingId={editingId()}
                     selectAll={selectAll()}
                     drafts={drafts()}
@@ -1437,7 +1439,7 @@ interface ColumnProps {
   onAddDraft: (text: string) => void;
   onStartAdd: () => void;
   onCommitAdd: (title: string) => void;
-  onCancelAdd: () => void;
+  onCloseAdd: () => void;
   editingId: string | null;
   selectAll: boolean;
   drafts: Record<string, string>;
@@ -1533,7 +1535,7 @@ function Column(props: ColumnProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") props.onCommitAdd(props.addDraft);
             }}
-            onBlur={props.onCancelAdd}
+            onBlur={props.onCloseAdd}
             ref={(el) => settleFocus(el)}
           />
         </Show>
