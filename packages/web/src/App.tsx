@@ -1,7 +1,7 @@
 // Single-view kanban board. No client router: "/" renders Home, "/p/:id"
 // renders Board, navigations are real page loads. Server echo is truth;
 // local writes are optimistic with rollback on failure.
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, flush, latest, onCleanup } from "solid-js";
 import {
   PROJECT_TITLE_MAX,
   STATUSES,
@@ -314,7 +314,9 @@ function Board(props: { projectId: string }) {
   function applyTodos(next: Todo[] | ((prev: Todo[]) => Todo[])): void {
     const active = document.activeElement as HTMLElement | null;
     const focusedId = active?.dataset?.todoId ?? null;
-    const prev = todos();
+    // Solid 2.0 batches writes: plain reads see the staged (old) value within
+    // one tick. Event batches (delta pull) must compose on the latest list.
+    const prev = latest(todos);
     const list = typeof next === "function" ? next(prev) : next;
     if (focusedId === null) {
       setTodos(list);
@@ -336,7 +338,7 @@ function Board(props: { projectId: string }) {
   }
 
   function applySnapshotTodos(next: Todo[]): void {
-    const { list, changed } = mergeTodos(todos(), next);
+    const { list, changed } = mergeTodos(latest(todos), next);
     applyTodos(list);
     flash(changed);
   }
@@ -344,6 +346,9 @@ function Board(props: { projectId: string }) {
   async function refetch(): Promise<void> {
     try {
       const snap = await fetchSnapshot(pid);
+      // A concurrent refetch (one per gap event) may resolve out of order;
+      // never roll state back past revs already applied.
+      if (snap.rev < lastRev) return;
       if (!editingProjectTitle()) {
         setProject(snap.project);
       } else {
@@ -377,7 +382,12 @@ function Board(props: { projectId: string }) {
           return;
         }
         if (res.events.length === 0) return;
-        for (const ev of res.events) onEvent(ev);
+        // One tick may hold many events; drain each before the next reads
+        // the list so no update composes on a stale snapshot.
+        for (const ev of res.events) {
+          onEvent(ev);
+          flush();
+        }
         if (res.events.length < 500) return;
         since = res.events[res.events.length - 1].rev;
       }
@@ -414,7 +424,7 @@ function Board(props: { projectId: string }) {
         rev: event.rev,
         deletedAt: Date.now(),
       }).catch(() => {});
-      applyTodos(todos().filter((t) => t.id !== event.todoId));
+      applyTodos(latest(todos).filter((t) => t.id !== event.todoId));
       return;
     }
     // Tombstone gate (P0-1): a delete suppresses only older-or-equal events,
@@ -426,7 +436,7 @@ function Board(props: { projectId: string }) {
       tombstones.delete(event.todo.id);
       void store?.deleteTombstone(event.todo.id).catch(() => {});
     }
-    const prev = todos();
+    const prev = latest(todos);
     const idx = prev.findIndex((t) => t.id === event.todo.id);
     const next =
       idx < 0
@@ -588,7 +598,7 @@ function Board(props: { projectId: string }) {
     }
     lastRev = rev;
     if (todo) {
-      const prev = todos();
+      const prev = latest(todos);
       const idx = prev.findIndex((t) => t.id === todo.id);
       const next =
         idx < 0
