@@ -133,12 +133,13 @@ describe("card context menu", () => {
     expect(columnIds(0)).toEqual(["h1"]);
     expect(sheetShown()).toBeTruthy();
 
-    // Arrows move between actions.
+    // Arrows move between actions, skipping the ones that cannot apply.
     key("ArrowDown");
     await settle();
     const items = [...document.querySelectorAll(".sheet-item")];
     expect(items.every((el) => el.getAttribute("role") === "menuitem")).toBe(true);
-    expect(document.activeElement).toBe(items[1]);
+    expect((items[1] as HTMLButtonElement).disabled).toBe(true);
+    expect(document.activeElement).toBe(items[2]);
 
     // Escape closes and returns focus to the card.
     key("Escape");

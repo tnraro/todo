@@ -403,9 +403,14 @@ textarea {
   cursor: pointer;
 }
 
-.sheet-item:hover,
-.sheet-item:active {
+.sheet-item:hover:not(:disabled),
+.sheet-item:active:not(:disabled) {
   background: var(--card);
+}
+
+.sheet-item:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .sheet-item.danger {

@@ -912,7 +912,7 @@ function Board(props: { projectId: string }) {
       if (!menuFor()) return;
       document
         .querySelector<HTMLElement>(".sheet")
-        ?.querySelector<HTMLElement>(".sheet-item")
+        ?.querySelector<HTMLElement>(".sheet-item:not(:disabled)")
         ?.focus();
     });
   }
@@ -978,7 +978,9 @@ function Board(props: { projectId: string }) {
         closeMenu();
       } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const items = [...document.querySelectorAll<HTMLElement>(".sheet-item")];
+        const items = [
+          ...document.querySelectorAll<HTMLElement>(".sheet-item:not(:disabled)"),
+        ];
         if (items.length === 0) return;
         const at = items.indexOf(document.activeElement as HTMLElement);
         const dir = e.key === "ArrowDown" ? 1 : -1;
@@ -1378,8 +1380,21 @@ function Board(props: { projectId: string }) {
             </div>
             <Show when={menuFor()}>
               {(getId) => {
-                const archived = () =>
-                  todos().find((td) => td.id === getId())?.status === "archive";
+                const menuTodo = () => todos().find((td) => td.id === getId());
+                const archived = () => menuTodo()?.status === "archive";
+                const canMove = (dir: 1 | -1) => {
+                  const todo = menuTodo();
+                  if (!todo) return false;
+                  const ni = STATUSES.indexOf(todo.status) + dir;
+                  return ni >= 0 && ni < STATUSES.length;
+                };
+                const canReorder = (dir: 1 | -1) => {
+                  const todo = menuTodo();
+                  if (!todo) return false;
+                  const col = columns()[todo.status];
+                  const i = col.findIndex((td) => td.id === todo.id);
+                  return i >= 0 && i + dir >= 0 && i + dir < col.length;
+                };
                 const act = (fn: (id: string) => void) => () => {
                   const id = getId();
                   closeMenu();
@@ -1399,16 +1414,36 @@ function Board(props: { projectId: string }) {
                       <button class="sheet-item" role="menuitem" onClick={act((id) => startEdit(id))}>
                         {t().menu.edit}
                       </button>
-                      <button class="sheet-item" role="menuitem" onClick={act((id) => moveStatus(id, -1))}>
+                      <button
+                        class="sheet-item"
+                        role="menuitem"
+                        disabled={!canMove(-1)}
+                        onClick={act((id) => moveStatus(id, -1))}
+                      >
                         ← {t().menu.left}
                       </button>
-                      <button class="sheet-item" role="menuitem" onClick={act((id) => moveStatus(id, 1))}>
+                      <button
+                        class="sheet-item"
+                        role="menuitem"
+                        disabled={!canMove(1)}
+                        onClick={act((id) => moveStatus(id, 1))}
+                      >
                         → {t().menu.right}
                       </button>
-                      <button class="sheet-item" role="menuitem" onClick={act((id) => reorder(id, -1))}>
+                      <button
+                        class="sheet-item"
+                        role="menuitem"
+                        disabled={!canReorder(-1)}
+                        onClick={act((id) => reorder(id, -1))}
+                      >
                         ↑ {t().menu.up}
                       </button>
-                      <button class="sheet-item" role="menuitem" onClick={act((id) => reorder(id, 1))}>
+                      <button
+                        class="sheet-item"
+                        role="menuitem"
+                        disabled={!canReorder(1)}
+                        onClick={act((id) => reorder(id, 1))}
+                      >
                         ↓ {t().menu.down}
                       </button>
                       <button
