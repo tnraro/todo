@@ -27,6 +27,10 @@ class ProjectHub {
       this.subs.delete(sink);
     };
   }
+
+  hasSubscribers(): boolean {
+    return this.subs.size > 0;
+  }
 }
 
 export class EventHub {
@@ -52,6 +56,7 @@ export class EventHub {
    */
   stream(projectId: string, initial: ServerEvent[]): Response {
     const hub = this.hub(projectId);
+    const hubs = this.hubs;
     const frames = initial.map(encodeEvent);
     let unsubscribe: (() => void) | null = null;
     let ping: ReturnType<typeof setInterval> | null = null;
@@ -78,6 +83,10 @@ export class EventHub {
       cancel() {
         if (ping) clearInterval(ping);
         unsubscribe?.();
+        // Drop empty hubs so idle projects do not accumulate in memory.
+        if (!hub.hasSubscribers() && hubs.get(projectId) === hub) {
+          hubs.delete(projectId);
+        }
       },
     });
 
@@ -86,6 +95,9 @@ export class EventHub {
         "content-type": "text/event-stream",
         "cache-control": "no-cache, no-transform",
         connection: "keep-alive",
+        // Reverse proxies buffer responses by default, which would hold SSE
+        // frames back until their buffers fill. Opt out explicitly.
+        "x-accel-buffering": "no",
       },
     });
   }

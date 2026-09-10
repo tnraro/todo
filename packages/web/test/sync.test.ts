@@ -84,4 +84,13 @@ describe("collapseOps", () => {
     const groups = collapseOps([a, op({ kind: "rename", todoId: "a", title: "y" })]);
     expect(groups[0].op.attempts).toBe(4);
   });
+
+  test("move replacement keeps the max attempts", () => {
+    const a = op({ kind: "move", todoId: "a", toStatus: "doing" });
+    a.attempts = 3;
+    const groups = collapseOps([a, op({ kind: "move", todoId: "a", toStatus: "done" })]);
+    expect(groups.length).toBe(1);
+    expect(groups[0].op.toStatus).toBe("done");
+    expect(groups[0].op.attempts).toBe(3);
+  });
 });

@@ -44,28 +44,57 @@ async function readBody(req: Request): Promise<unknown> {
   }
 }
 
-// Fixed-window per-IP limit for mutating methods. Generous on purpose:
-// it only stops floods, not fast typists.
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 300;
-const rateBuckets = new Map<string, { count: number; start: number }>();
+/** Decode a URL path segment, null when the percent-encoding is malformed. */
+function decodeSegment(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}
 
-function rateLimited(req: Request): boolean {
+// Fixed-window limits for mutating methods: per-IP and per-project (DESIGN 9).
+// Generous on purpose: they only stop floods, not fast typists.
+const RATE_WINDOW_MS = 60_000;
+let RATE_IP_MAX = 600;
+let RATE_PROJECT_MAX = 1800;
+const ipBuckets = new Map<string, { count: number; start: number }>();
+const projectBuckets = new Map<string, { count: number; start: number }>();
+
+/** Test-only hook to shrink the windows. Restored by the caller. */
+export function setRateLimits(ipMax: number, projectMax: number): void {
+  RATE_IP_MAX = ipMax;
+  RATE_PROJECT_MAX = projectMax;
+}
+
+function overLimit(
+  buckets: Map<string, { count: number; start: number }>,
+  key: string,
+  max: number,
+  now: number,
+): boolean {
+  if (buckets.size > 10_000) buckets.clear();
+  const bucket = buckets.get(key);
+  if (!bucket || now - bucket.start > RATE_WINDOW_MS) {
+    buckets.set(key, { count: 1, start: now });
+    return false;
+  }
+  bucket.count++;
+  return bucket.count > max;
+}
+
+function rateLimited(req: Request, projectId: string | null): boolean {
   if (req.method !== "POST" && req.method !== "PATCH" && req.method !== "DELETE") {
     return false;
   }
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
-  if (rateBuckets.size > 10_000) rateBuckets.clear();
   const now = Date.now();
-  const bucket = rateBuckets.get(ip);
-  if (!bucket || now - bucket.start > RATE_WINDOW_MS) {
-    rateBuckets.set(ip, { count: 1, start: now });
-    return false;
-  }
-  bucket.count++;
-  return bucket.count > RATE_MAX;
+  if (overLimit(ipBuckets, ip, RATE_IP_MAX, now)) return true;
+  return (
+    projectId !== null && overLimit(projectBuckets, projectId, RATE_PROJECT_MAX, now)
+  );
 }
 
 interface Neighbors {
@@ -168,8 +197,11 @@ export function createApp(db: Db, options: AppOptions = {}) {
     async fetch(req: Request, _server: Server): Promise<Response> {
       const url = new URL(req.url);
       const path = url.pathname;
+      const projectMatch = path.match(/^\/api\/projects\/([^/]+)(\/.*)?$/);
 
-      if (rateLimited(req)) return json({ error: "rate limited" }, 429);
+      if (rateLimited(req, projectMatch?.[1] ?? null)) {
+        return json({ error: "rate limited" }, 429);
+      }
 
       // --- Projects -------------------------------------------------------
       if (path === "/api/projects" && req.method === "POST") {
@@ -181,9 +213,9 @@ export function createApp(db: Db, options: AppOptions = {}) {
         return json({ id, title }, 201);
       }
 
-      const projectMatch = path.match(/^\/api\/projects\/([^/]+)(\/.*)?$/);
       if (projectMatch) {
-        const projectId = decodeURIComponent(projectMatch[1]);
+        const projectId = decodeSegment(projectMatch[1]);
+        if (projectId === null) return notFound("project not found");
         const rest = projectMatch[2] ?? "";
 
         if (rest === "" && req.method === "GET") {
@@ -256,7 +288,8 @@ export function createApp(db: Db, options: AppOptions = {}) {
 
         const todoMatch = rest.match(/^\/todos\/([^/]+)(\/.*)?$/);
         if (todoMatch) {
-          const todoId = decodeURIComponent(todoMatch[1]);
+          const todoId = decodeSegment(todoMatch[1]);
+          if (todoId === null) return notFound("todo not found");
           const action = todoMatch[2] ?? "";
 
           if (action === "" && req.method === "PATCH") {

@@ -3,7 +3,9 @@
 // local writes are optimistic with rollback on failure.
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import {
+  PROJECT_TITLE_MAX,
   STATUSES,
+  TODO_TITLE_MAX,
   keyBetween,
   type Project,
   type ServerEvent,
@@ -114,8 +116,12 @@ function Home() {
     if (busy()) return;
     setBusy(true);
     try {
-      const project = await createProject(title().trim() || t().untitled);
+      const clean =
+        title().trim().slice(0, PROJECT_TITLE_MAX) || t().untitled;
+      const project = await createProject(clean);
       location.href = `/p/${project.id}`;
+    } catch {
+      // Keep the draft; the button is the retry.
     } finally {
       setBusy(false);
     }
@@ -144,6 +150,7 @@ function Home() {
           class="text-input"
           placeholder={t().home.titlePlaceholder}
           value={title()}
+          maxlength={PROJECT_TITLE_MAX}
           onInput={(e) => setTitle(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") void create();
@@ -231,6 +238,16 @@ function Board(props: { projectId: string }) {
     state: "synced" | "syncing" | "offline";
     pending: number;
   }>({ state: "syncing", pending: 0 });
+
+  /** Pending flags mirror the outbox: no queued op means nothing is pending,
+   * so a crash between dequeue and ack cannot strand a dimmed card. */
+  async function pendingFromOutbox(): Promise<Record<string, true>> {
+    if (!store) return {};
+    const ops = await store.listOutbox(pid).catch(() => []);
+    const pd: Record<string, true> = {};
+    for (const op of ops) if (op.todoId) pd[op.todoId] = true;
+    return pd;
+  }
 
   const columns = createMemo(() => {
     const all = todos();
@@ -334,6 +351,7 @@ function Board(props: { projectId: string }) {
       }
       lastRev = snap.rev;
       applySnapshotTodos(snap.todos);
+      setPending(await pendingFromOutbox());
       // Snapshot is truth: tombstones for todos the server still has are stale.
       const alive = new Set(snap.todos.map((td) => td.id));
       for (const id of [...tombstones.keys()]) {
@@ -493,31 +511,33 @@ function Board(props: { projectId: string }) {
               progressed = true;
               applyAck(op, res.rev, res.todo, res.project);
             } catch (e) {
-              if (e instanceof ApiError && (e.status === 404 || e.status === 409)) {
-                // Converged or conflicted server-side. A 409 on delete means
-                // the todo was remotely un-archived: drop only the delete and
-                // let the surviving ops resend after a pull (remote wins).
+              if (e instanceof ApiError && e.status < 500 && e.status !== 429) {
+                // Converged or permanently invalid. A 409 on delete means the
+                // todo was remotely un-archived: drop only the delete and let
+                // the surviving ops resend after the refetch (remote wins).
                 if (e.status === 409 && op.kind === "delete" && op.seq !== undefined) {
                   await s.removeOps([op.seq]).catch(() => {});
                 } else {
                   await s.removeOps(seqs).catch(() => {});
+                  if (op.todoId) unmarkPending(op.todoId);
                 }
                 progressed = true;
-                void pullDelta();
+                void refetch(); // truth, not just events: the op never applied
                 break;
               }
               if (e instanceof ApiError && e.status >= 500) {
                 const attempts = op.attempts + 1;
                 if (attempts > MAX_OP_ATTEMPTS) {
                   await s.removeOps(seqs).catch(() => {});
-                  void pullDelta();
+                  if (op.todoId) unmarkPending(op.todoId);
+                  void refetch();
                 } else {
                   for (const seq of seqs) {
                     await s.setAttempts(seq, attempts).catch(() => {});
                   }
                 }
               }
-              break; // network error or poison: stop, keep queued
+              break; // network error, 429, or retryable 5xx: stop, keep queued
             }
           }
           updateSyncStatus();
@@ -584,7 +604,7 @@ function Board(props: { projectId: string }) {
   }
 
   function handleCreate(title: string): void {
-    const clean = title.trim();
+    const clean = title.trim().slice(0, TODO_TITLE_MAX);
     if (!clean) return;
     const id = genTodoId();
     const optimistic: Todo = {
@@ -607,7 +627,7 @@ function Board(props: { projectId: string }) {
   }
 
   function handleRename(id: string, title: string): void {
-    const clean = title.trim();
+    const clean = title.trim().slice(0, TODO_TITLE_MAX);
     const prev = todos().find((t) => t.id === id);
     if (!prev || prev.title === clean || !clean) return;
     applyTodos((list) => list.map((t) => (t.id === id ? { ...t, title: clean } : t)));
@@ -710,7 +730,7 @@ function Board(props: { projectId: string }) {
   }
 
   function handleProjectRename(title: string): void {
-    const clean = title.trim();
+    const clean = title.trim().slice(0, PROJECT_TITLE_MAX);
     const prev = project();
     if (!prev || prev.title === clean || !clean) return;
     setProject({ ...prev, title: clean });
@@ -955,8 +975,10 @@ function Board(props: { projectId: string }) {
       startEdit(id);
     } else if (e.key === "Delete" || e.key === "Backspace") {
       // Backspace doubles as Delete for keyboards without a Delete key.
-      // Inputs return earlier, so text editing is never affected.
+      // Inputs return earlier, so text editing is never affected. Held-key
+      // auto-repeat must not turn archive into permanent delete.
       e.preventDefault();
+      if (e.repeat) return;
       handleDelete(id);
     } else if (
       (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
@@ -1087,9 +1109,9 @@ function Board(props: { projectId: string }) {
       setProject({ id: cached.id, title: cached.title });
       const ct = await store.getTodos(pid).catch(() => []);
       setTodos(ct);
-      const pd: Record<string, true> = {};
-      for (const td of ct) if (td.pending) pd[td.id] = true;
-      setPending(pd);
+      // Pending is a property of the outbox, never of the cache: a crash
+      // between dequeue and ack must not strand a dimmed card.
+      setPending(await pendingFromOutbox());
       lastRev = cached.lastRev;
       setState("ready");
       saveRecent({ id: cached.id, title: cached.title });
@@ -1102,15 +1124,10 @@ function Board(props: { projectId: string }) {
       } else {
         pendingRemoteTitle = snap.project.title;
       }
-      // Snapshot is truth: exact replace without a flash storm; pending
-      // survives only for todos the server still has.
+      // Snapshot is truth: exact replace without a flash storm; pending is
+      // rederived from the outbox so nobody stays dimmed without a queued op.
       setTodos(snap.todos);
-      setPending((prev) => {
-        const ids = new Set(snap.todos.map((td) => td.id));
-        const next: Record<string, true> = {};
-        for (const id of Object.keys(prev)) if (ids.has(id)) next[id] = true;
-        return next;
-      });
+      setPending(await pendingFromOutbox());
       lastRev = snap.rev;
       setState("ready");
       saveRecent(snap.project);
@@ -1177,6 +1194,7 @@ function Board(props: { projectId: string }) {
                   <input
                     class="title-input"
                     value={projectDraft()}
+                    maxlength={PROJECT_TITLE_MAX}
                     onInput={(e) => setProjectDraft(e.currentTarget.value)}
                     onKeyDown={(e) => {
                       // Enter and blur share one commit path: blur the input
@@ -1453,6 +1471,7 @@ function Column(props: ColumnProps) {
             class="text-input card-input"
             placeholder={t().column.newTodoPlaceholder}
             value={props.addDraft}
+            maxlength={TODO_TITLE_MAX}
             onInput={(e) => props.onAddDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") props.onCommitAdd(props.addDraft);
@@ -1506,6 +1525,7 @@ function Column(props: ColumnProps) {
                 <input
                   class="text-input card-input"
                   value={props.drafts[todo.id] ?? todo.title}
+                  maxlength={TODO_TITLE_MAX}
                   onInput={(e) => props.onDraft(todo.id, e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") props.onCommitEdit(todo.id, true);
@@ -1531,9 +1551,21 @@ function Column(props: ColumnProps) {
   );
 }
 
+/** Project id from the path. Malformed escapes fall back to the raw segment so
+ * the server answers 404 instead of the render throwing. */
+function projectIdFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/p\/([^/]+)$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 // --- App --------------------------------------------------------------------
 export default function App() {
-  const match = location.pathname.match(/^\/p\/([^/]+)$/);
-  if (match) return <Board projectId={decodeURIComponent(match[1])} />;
+  const id = projectIdFromPath(location.pathname);
+  if (id) return <Board projectId={id} />;
   return <Home />;
 }

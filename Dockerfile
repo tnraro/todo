@@ -19,6 +19,8 @@ ENV NODE_ENV=production \
 COPY package.json bun.lock ./
 COPY packages/shared packages/shared
 COPY packages/server packages/server
+# Workspace manifests must all be present or the frozen lockfile check fails.
+COPY packages/web/package.json packages/web/
 RUN bun install --production --frozen-lockfile
 COPY --from=build /app/packages/web/dist packages/web/dist
 VOLUME /data

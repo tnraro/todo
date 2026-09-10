@@ -67,6 +67,40 @@ describe("delete key", () => {
     expect(columnIds(3)).toEqual([]);
     expect(document.activeElement).toBe(document.body);
   });
+
+  test("held-key auto-repeat does not hard delete", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp({
+      project: { id: "del123", title: "D" },
+      todos: [
+        { id: "h1", projectId: "del123", title: "hold", status: "todo", rank: "5", updatedAt: 1 },
+      ],
+      rev: 0,
+    });
+    await settle();
+
+    const card = (id: string): HTMLElement =>
+      document.querySelector(`[data-todo-id="${id}"]`) as HTMLElement;
+    card("h1").focus();
+    key(card("h1"), "Delete");
+    const archived = await waitFor(1500, () => focusedCardIn("h1", 3));
+    expect(archived).toBeTruthy();
+
+    // OS key repeat arrives as repeat:true with focus already on the archived
+    // card; it must not escalate archive into permanent delete.
+    archived!.dispatchEvent(
+      new window.KeyboardEvent("keydown", {
+        key: "Delete",
+        bubbles: true,
+        repeat: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(columnIds(3)).toEqual(["h1"]);
+    const snap = await fetch("/api/projects/del123").then((r) => r.json());
+    expect(snap.todos.some((t: { id: string }) => t.id === "h1")).toBe(true);
+  });
 });
 
 afterAll(async () => {

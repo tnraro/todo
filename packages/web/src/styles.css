@@ -275,6 +275,12 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .card.flash {
+    animation: none;
+  }
+}
+
 .add-row {
   background: none;
   border: none;

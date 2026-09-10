@@ -1,6 +1,6 @@
 // HTTP integration tests: REST contract, ordering, LWW revs, SSE stream.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index";
+import { createApp, setRateLimits } from "../src/index";
 import { openDb, setLogCap } from "../src/db";
 import { EventHub } from "../src/events";
 import type { Snapshot, Todo } from "@todo/shared";
@@ -352,5 +352,42 @@ describe("log", () => {
     expect((await req("GET", `/api/projects/${pid}/log?since=nope`)).status).toBe(400);
     expect((await req("GET", `/api/projects/${pid}/log?since=-1`)).status).toBe(400);
     expect((await req("GET", "/api/projects/nope/log?since=0")).status).toBe(404);
+  });
+});
+
+describe("request hardening", () => {
+  test("malformed percent-encoding is a 404, not a crash", async () => {
+    expect((await fetch(base + "/api/projects/%")).status).toBe(404);
+    expect((await fetch(base + "/api/projects/%zz")).status).toBe(404);
+    expect((await fetch(base + "/api/projects/%E0%A4%A")).status).toBe(404);
+    expect((await fetch(base + "/api/projects/%2e%2e%2f%2e%2e")).status).toBe(404);
+  });
+
+  test("sse responses opt out of proxy buffering", async () => {
+    const { data } = await req("POST", "/api/projects", { title: "Buf" });
+    await req("POST", `/api/projects/${data.id}/todos`, { id: "b1", title: "b1" });
+    // A replayed frame is required: with no initial bytes the fetch promise
+    // only settles once the first live event arrives.
+    const res = await fetch(`${base}/api/projects/${data.id}/events?sinceRev=0`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-accel-buffering")).toBe("no");
+    await res.body!.cancel();
+  });
+
+  test("per-project limit throttles one project without touching another", async () => {
+    setRateLimits(1000, 3);
+    try {
+      const a = (await req("POST", "/api/projects", { title: "RL-A" })).data
+        .id as string;
+      const b = (await req("POST", "/api/projects", { title: "RL-B" })).data
+        .id as string;
+      expect((await req("PATCH", `/api/projects/${a}`, { title: "A1" })).status).toBe(200);
+      expect((await req("PATCH", `/api/projects/${a}`, { title: "A2" })).status).toBe(200);
+      expect((await req("PATCH", `/api/projects/${a}`, { title: "A3" })).status).toBe(200);
+      expect((await req("PATCH", `/api/projects/${a}`, { title: "A4" })).status).toBe(429);
+      expect((await req("PATCH", `/api/projects/${b}`, { title: "B1" })).status).toBe(200);
+    } finally {
+      setRateLimits(600, 1800);
+    }
   });
 });

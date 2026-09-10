@@ -75,7 +75,10 @@ export function collapseOps(ops: OutboxOp[]): CollapsedOp[] {
       }
     } else if (op.kind === "move") {
       if (slot.move !== undefined) {
-        out[slot.move].op = { ...op };
+        out[slot.move].op = {
+          ...op,
+          attempts: Math.max(out[slot.move].op.attempts, op.attempts),
+        };
         out[slot.move].seqs.push(seq);
       } else {
         slot.move = out.length;

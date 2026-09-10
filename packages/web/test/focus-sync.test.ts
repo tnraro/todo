@@ -81,6 +81,109 @@ describe("offline outbox", () => {
       "offline todo",
     ]);
   });
+
+  test("a 400 response converges the op instead of wedging the queue", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp({
+      project: { id: "sync2", title: "S2" },
+      todos: [
+        { id: "q1", projectId: "sync2", title: "short", status: "todo", rank: "5", updatedAt: 1 },
+      ],
+      rev: 0,
+    });
+    await settle();
+    await waitFor(2000, () => (syncText().startsWith("Synced") ? document.body : null));
+
+    const realFetch = globalThis.fetch;
+    (globalThis as Record<string, unknown>).fetch = async (
+      input: unknown,
+      init?: RequestInit,
+    ) => {
+      if ((init?.method ?? "GET") === "PATCH") {
+        return Response.json({ error: "title must be 1-200 chars" }, { status: 400 });
+      }
+      return realFetch(input, init);
+    };
+
+    const card = document.querySelector('[data-todo-id="q1"]') as HTMLElement;
+    card.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    const edit = await waitFor(1000, () => {
+      const el = document.querySelector(
+        ".column-body .text-input",
+      ) as HTMLInputElement | null;
+      return el && document.activeElement === el ? el : null;
+    });
+    edit!.value = "renamed";
+    edit!.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await settle();
+    edit!.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    await waitFor(1500, () => (syncText().includes("Syncing") ? document.body : null));
+
+    // Healthy backend again: the rejected op must not block later ops.
+    (globalThis as Record<string, unknown>).fetch = realFetch;
+    (document.querySelector(".add-row") as HTMLElement).dispatchEvent(
+      new window.MouseEvent("click", { bubbles: true }),
+    );
+    const add = await waitFor(1000, () => {
+      const el = document.querySelector(
+        ".column .text-input",
+      ) as HTMLInputElement | null;
+      return el && document.activeElement === el ? el : null;
+    });
+    add!.value = "after 400";
+    add!.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await settle();
+    add!.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+    await settle();
+    await new Promise((r) => setTimeout(r, 300));
+    const snap = await fetch("/api/projects/sync2").then((r) => r.json());
+    expect(
+      snap.todos.some((t: { title: string }) => t.title === "after 400"),
+    ).toBe(true);
+    // The rejected rename was dropped and the snapshot restored server truth.
+    expect(snap.todos.find((t: { id: string }) => t.id === "q1")?.title).toBe(
+      "short",
+    );
+  });
+
+  test("overlong titles are clamped before they reach the server", async () => {
+    const { mountApp, settle } = await import("../dist-focus/harness.js");
+    await mountApp({
+      project: { id: "sync3", title: "S3" },
+      todos: [
+        { id: "l1", projectId: "sync3", title: "short", status: "todo", rank: "5", updatedAt: 1 },
+      ],
+      rev: 0,
+    });
+    await settle();
+    await waitFor(2000, () => (syncText().startsWith("Synced") ? document.body : null));
+
+    const card = document.querySelector('[data-todo-id="l1"]') as HTMLElement;
+    card.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    const edit = await waitFor(1000, () => {
+      const el = document.querySelector(
+        ".column-body .text-input",
+      ) as HTMLInputElement | null;
+      return el && document.activeElement === el ? el : null;
+    });
+    edit!.value = "x".repeat(300);
+    edit!.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await settle();
+    edit!.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+    await settle();
+    await new Promise((r) => setTimeout(r, 300));
+    const snap = await fetch("/api/projects/sync3").then((r) => r.json());
+    expect(snap.todos[0].title.length).toBe(200);
+    expect(snap.todos[0].title).toBe("x".repeat(200));
+  });
 });
 
 afterAll(async () => {
