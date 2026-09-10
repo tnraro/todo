@@ -39,10 +39,10 @@ textarea {
   -webkit-user-select: text;
 }
 
-/* Keyboard focus ring. Inputs keep their accent border as the indicator. */
+/* Keyboard focus ring for controls. Inputs and cards keep their accent
+ * border as the indicator, so an extra outline would double up. */
 button:focus-visible,
-a:focus-visible,
-.card:focus-visible {
+a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
