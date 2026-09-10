@@ -36,6 +36,7 @@ const en = {
     renameProject: "Rename project",
     copyLink: "Copy link",
     copied: "Copied",
+    saveFailed: "Some changes could not be saved.",
   },
   column: {
     add: "+ Add",
@@ -101,6 +102,7 @@ const ko: Dict = {
     renameProject: "프로젝트 이름 바꾸기",
     copyLink: "링크 복사",
     copied: "복사됨",
+    saveFailed: "일부 변경을 저장하지 못했습니다.",
   },
   column: {
     add: "+ 추가",

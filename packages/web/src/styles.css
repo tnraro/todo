@@ -127,6 +127,14 @@ textarea {
   padding: 2px 0;
 }
 
+.notice {
+  background: #5c2a28;
+  color: #ffd7d5;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px 0;
+}
+
 .topbar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

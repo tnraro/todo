@@ -243,6 +243,17 @@ function Board(props: { projectId: string }) {
     state: "synced" | "syncing" | "offline";
     pending: number;
   }>({ state: "syncing", pending: 0 });
+  /** Transient banner for changes the server refused; silent loss is worse. */
+  const [notice, setNotice] = createSignal<string | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  function showNotice(message: string): void {
+    setNotice(message);
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => setNotice(null), 4000);
+  }
+  onCleanup(() => {
+    if (noticeTimer) clearTimeout(noticeTimer);
+  });
 
   /** Pending flags mirror the outbox: no queued op means nothing is pending,
    * so a crash between dequeue and ack cannot strand a dimmed card. */
@@ -535,6 +546,11 @@ function Board(props: { projectId: string }) {
                 } else {
                   await s.removeOps(seqs).catch(() => {});
                   if (op.todoId) unmarkPending(op.todoId);
+                  // 404/409 are convergence; anything else means the edit was
+                  // rejected and is about to vanish, so say so.
+                  if (e.status !== 404 && e.status !== 409) {
+                    showNotice(t().board.saveFailed);
+                  }
                 }
                 progressed = true;
                 void refetch(); // truth, not just events: the op never applied
@@ -545,6 +561,7 @@ function Board(props: { projectId: string }) {
                 if (attempts > MAX_OP_ATTEMPTS) {
                   await s.removeOps(seqs).catch(() => {});
                   if (op.todoId) unmarkPending(op.todoId);
+                  showNotice(t().board.saveFailed);
                   void refetch();
                 } else {
                   for (const seq of seqs) {
@@ -1201,6 +1218,13 @@ function Board(props: { projectId: string }) {
     <div class="board">
       <Show when={conn() === "reconnecting" && state() === "ready"}>
         <div class="reconnect">{t().board.reconnecting}</div>
+      </Show>
+      <Show when={notice()}>
+        {(msg) => (
+          <div class="notice" role="status">
+            {msg()}
+          </div>
+        )}
       </Show>
       <Show when={state() === "loading"}>
         <header class="topbar">

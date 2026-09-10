@@ -125,6 +125,11 @@ describe("offline outbox", () => {
       new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
     );
     await waitFor(1500, () => (syncText().includes("Syncing") ? document.body : null));
+    // The rejected edit is dropped with a visible notice, not silently.
+    const notice = await waitFor(1500, () =>
+      document.querySelector(".notice") ? document.body : null,
+    );
+    expect(notice).toBeTruthy();
 
     // Healthy backend again: the rejected op must not block later ops.
     (globalThis as Record<string, unknown>).fetch = realFetch;
